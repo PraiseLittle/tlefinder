@@ -1,0 +1,38 @@
+{
+  "active_sample.tle": [
+    {
+      "name": "ISS (ZARYA)",
+      "catalog_number": 25544,
+      "epoch_utc": "2026-05-12T12:00:00+00:00"
+    },
+    {
+      "name": "HST",
+      "catalog_number": 20580,
+      "epoch_utc": "2026-05-12T06:00:00+00:00"
+    }
+  ],
+  "visual_sample.tle": [
+    {
+      "name": "CALSPHERE 1",
+      "catalog_number": 900,
+      "epoch_utc": "2026-05-12T18:00:00+00:00"
+    },
+    {
+      "name": "CALSPHERE 2",
+      "catalog_number": 902,
+      "epoch_utc": "2026-05-12T15:00:00+00:00"
+    }
+  ],
+  "amateur_sample.tle": [
+    {
+      "name": "OSCAR 7 (AO-7)",
+      "catalog_number": 7530,
+      "epoch_utc": "2026-05-12T21:00:00+00:00"
+    },
+    {
+      "name": "NOAA 18",
+      "catalog_number": 28654,
+      "epoch_utc": "2026-05-12T03:00:00+00:00"
+    }
+  ]
+}
