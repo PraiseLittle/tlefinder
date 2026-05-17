@@ -40,25 +40,11 @@ def test_shared_response_model_reports_no_result_status():
     assert response.diagnostics["reason"] == "no candidate matched"
 
 
-def test_phase_2_criteria_excludes_magnitude_and_object_type():
+def test_phase_2_criteria_excludes_object_type():
     from tlefinder.core.models import SearchCriteria
-
-    with pytest.raises(TypeError, match="magnitude"):
-        SearchCriteria(magnitude_limit=6.0)
 
     with pytest.raises(TypeError, match="object"):
         SearchCriteria(object_type="payload")
-
-
-def test_pass_metrics_reserves_inactive_magnitude_field():
-    from tlefinder.core.models import PassMetrics
-
-    metrics = PassMetrics(
-        satellite_altitude_km=420.0,
-        sun_proximity_deg=35.0,
-    )
-
-    assert metrics.magnitude is None
 
 
 def test_candidate_pass_uses_stable_default_diagnostics():

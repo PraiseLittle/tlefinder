@@ -62,23 +62,44 @@ def load_tle_dataset(
     config = _source_config_for(group, source_configs)
     cache_path = _cache_path(cache_dir, config)
 
-    if _is_cache_file_fresh(cache_path, as_of_utc, max_age_hours=max_age_hours):
-        source_path = cache_path
-    else:
-        source_path = download_tle_dataset(
-            group,
-            cache_dir=cache_dir,
-            http_client=http_client,
-            source_configs=source_configs,
+    if cache_path.exists():
+        cached_records = _parse_tle_file(cache_path, source_group=group)
+        fresh_records, freshness_metadata = _filter_fresh_records_with_metadata(
+            cached_records,
+            as_of_utc,
+            max_age_hours=max_age_hours,
         )
+        if fresh_records:
+            return build_satellite_records(
+                fresh_records,
+                dataset_metadata=freshness_metadata,
+            )
+
+    source_path = download_tle_dataset(
+        group,
+        cache_dir=cache_dir,
+        http_client=http_client,
+        source_configs=source_configs,
+    )
 
     tle_records = _parse_tle_file(source_path, source_group=group)
-    if not is_tle_fresh(tle_records, as_of_utc, max_age_hours=max_age_hours):
+    fresh_records, freshness_metadata = _filter_fresh_records_with_metadata(
+        tle_records,
+        as_of_utc,
+        max_age_hours=max_age_hours,
+    )
+    if not fresh_records:
         raise TleFreshnessError(
-            f"TLE dataset for {group.value} is older than {max_age_hours:g} hours"
+            f"no fresh TLE records remain for {group.value} within "
+            f"{max_age_hours:g} hours "
+            f"({freshness_metadata['stale_record_count']} stale of "
+            f"{freshness_metadata['total_record_count']} total)"
         )
 
-    return build_satellite_records(tle_records)
+    return build_satellite_records(
+        fresh_records,
+        dataset_metadata=freshness_metadata,
+    )
 
 
 def download_tle_dataset(
@@ -120,20 +141,29 @@ def parse_tle_file(path: Path | str) -> list[TleRecord]:
     return _parse_tle_file(source_path, source_group=source_group)
 
 
-def build_satellite_records(tle_records: list[TleRecord]) -> list[SatelliteRecord]:
+def build_satellite_records(
+    tle_records: list[TleRecord],
+    *,
+    dataset_metadata: dict[str, int | float] | None = None,
+) -> list[SatelliteRecord]:
     """Create satellite-level records from raw TLE records."""
 
-    return [
-        SatelliteRecord(
-            tle=record,
-            aliases=(record.name,),
-            metadata={
-                "catalog_number": record.catalog_number,
-                "source_group": record.source_group.value,
-            },
+    satellite_records: list[SatelliteRecord] = []
+    for record in tle_records:
+        metadata = {
+            "catalog_number": record.catalog_number,
+            "source_group": record.source_group.value,
+        }
+        if dataset_metadata is not None:
+            metadata["tle_dataset"] = dict(dataset_metadata)
+        satellite_records.append(
+            SatelliteRecord(
+                tle=record,
+                aliases=(record.name,),
+                metadata=metadata,
+            )
         )
-        for record in tle_records
-    ]
+    return satellite_records
 
 
 def is_tle_fresh(
@@ -155,6 +185,49 @@ def is_tle_fresh(
             return False
 
     return True
+
+
+def filter_fresh_tle_records(
+    records: list[TleRecord],
+    as_of_utc: datetime,
+    max_age_hours: int = DEFAULT_MAX_TLE_AGE_HOURS,
+) -> list[TleRecord]:
+    """Return fresh TLE records in their original source order."""
+
+    fresh_records, _ = _filter_fresh_records_with_metadata(
+        records,
+        as_of_utc,
+        max_age_hours=max_age_hours,
+    )
+    return fresh_records
+
+
+def _filter_fresh_records_with_metadata(
+    records: list[TleRecord],
+    as_of_utc: datetime,
+    *,
+    max_age_hours: int,
+) -> tuple[list[TleRecord], dict[str, int | float]]:
+    reference_time = _require_aware_utc(as_of_utc, name="as_of_utc")
+    max_age = timedelta(hours=max_age_hours)
+
+    fresh_records: list[TleRecord] = []
+    for record in records:
+        epoch_utc = _require_aware_utc(record.epoch_utc, name="record.epoch_utc")
+        if reference_time - epoch_utc <= max_age:
+            fresh_records.append(record)
+
+    total_count = len(records)
+    fresh_count = len(fresh_records)
+    return (
+        fresh_records,
+        {
+            "total_record_count": total_count,
+            "fresh_record_count": fresh_count,
+            "stale_record_count": total_count - fresh_count,
+            "max_age_hours": max_age_hours,
+        },
+    )
 
 
 def _download_text(url: str, *, http_client: HttpClient | None) -> str:
@@ -292,24 +365,6 @@ def _cache_path(
     return directory / config.cache_filename
 
 
-def _is_cache_file_fresh(
-    path: Path,
-    as_of_utc: datetime,
-    *,
-    max_age_hours: int,
-) -> bool:
-    if not path.exists():
-        return False
-
-    reference_time = _require_aware_utc(as_of_utc, name="as_of_utc")
-    try:
-        modified_time = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-    except OSError:
-        return False
-
-    return reference_time - modified_time <= timedelta(hours=max_age_hours)
-
-
 def _require_aware_utc(value: datetime, *, name: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{name} must be timezone-aware")
@@ -323,6 +378,7 @@ __all__ = [
     "TleSourceConfig",
     "build_satellite_records",
     "download_tle_dataset",
+    "filter_fresh_tle_records",
     "is_tle_fresh",
     "load_tle_dataset",
     "parse_tle_file",

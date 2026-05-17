@@ -69,8 +69,7 @@ class TargetToleranceConstraint:
 class SearchCriteria:
     """Phase 2 search constraints and ranking controls.
 
-    Magnitude and object-type criteria are intentionally absent from this active
-    contract. ``PassMetrics.magnitude`` is reserved for later phases only.
+    Object-type criteria are intentionally absent from this active contract.
     """
 
     culmination_altitude_deg: RangeConstraint | None = None
@@ -135,7 +134,6 @@ class PassMetrics:
 
     satellite_altitude_km: float
     sun_proximity_deg: float | None = None
-    magnitude: float | None = None
 
 
 @dataclass(slots=True)

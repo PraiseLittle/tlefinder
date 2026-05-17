@@ -13,6 +13,10 @@ def normalize_start_time_to_utc(window: SearchWindow) -> datetime:
     start_at = window.start_at
     if start_at.tzinfo is None or start_at.utcoffset() is None:
         raise ValueError("SearchWindow.start_at must be timezone-aware")
+    if not isinstance(start_at.tzinfo, timezone):
+        raise ValueError(
+            "SearchWindow.start_at timezone must be UTC or a fixed UTC offset"
+        )
     return start_at.astimezone(timezone.utc)
 
 

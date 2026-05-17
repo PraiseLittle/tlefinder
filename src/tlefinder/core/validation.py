@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from math import isfinite
 from numbers import Real
 from typing import Any
@@ -20,7 +20,16 @@ from tlefinder.core.models import (
 
 MAX_SEARCH_DURATION_MINUTES = 30.0
 MIN_GROUND_ELEVATION_M = -500.0
-MAX_GROUND_ELEVATION_M = 10_000.0
+MAX_GROUND_ELEVATION_M = 8_000.0
+MIN_SATELLITE_ALTITUDE_KM = 200.0
+MAX_SATELLITE_ALTITUDE_KM = 15_000.0
+SUPPORTED_SATELLITE_GROUPS = frozenset(
+    {
+        SatelliteGroup.ACTIVE,
+        SatelliteGroup.VISUAL,
+        SatelliteGroup.AMATEUR,
+    }
+)
 
 
 def validate_search_request(request: SearchRequest) -> None:
@@ -28,12 +37,25 @@ def validate_search_request(request: SearchRequest) -> None:
 
     if not isinstance(request, SearchRequest):
         raise ValidationError("request must be a SearchRequest")
-    if not isinstance(request.satellite_group, SatelliteGroup):
-        raise ValidationError("satellite_group must be a SatelliteGroup")
 
+    validate_satellite_group(request.satellite_group)
     validate_ground_station(request.station)
     validate_search_window(request.window)
     validate_search_criteria(request.criteria)
+
+
+def validate_satellite_group(group: SatelliteGroup) -> None:
+    """Validate that ``group`` is one of the supported TLE source groupings."""
+
+    if not isinstance(group, SatelliteGroup) or group not in SUPPORTED_SATELLITE_GROUPS:
+        supported = ", ".join(
+            supported_group.value
+            for supported_group in sorted(
+                SUPPORTED_SATELLITE_GROUPS,
+                key=lambda supported_group: supported_group.value,
+            )
+        )
+        raise ValidationError(f"satellite_group must be one of: {supported}")
 
 
 def validate_ground_station(station: GroundStation) -> None:
@@ -53,7 +75,7 @@ def validate_ground_station(station: GroundStation) -> None:
     elevation_m = _require_finite_number("elevation", station.elevation_m)
     if not MIN_GROUND_ELEVATION_M <= elevation_m <= MAX_GROUND_ELEVATION_M:
         raise ValidationError(
-            "elevation must be within [-500, 10000] meters for a ground station"
+            "elevation must be within [-500, 8000] meters for a ground station"
         )
 
 
@@ -66,6 +88,10 @@ def validate_search_window(window: SearchWindow) -> None:
         raise ValidationError("start_at must be a datetime")
     if not _is_timezone_aware(window.start_at):
         raise ValidationError("start_at must include an explicit timezone")
+    if not _has_fixed_utc_offset(window.start_at):
+        raise ValidationError(
+            "start_at timezone must be UTC or a fixed UTC offset"
+        )
 
     duration_minutes = _require_finite_number("duration", window.duration_minutes)
     if duration_minutes <= 0.0:
@@ -118,7 +144,8 @@ def validate_search_criteria(criteria: SearchCriteria) -> None:
     _validate_range_constraint(
         "satellite_altitude_km",
         criteria.satellite_altitude_km,
-        lower=0.0,
+        lower=MIN_SATELLITE_ALTITUDE_KM,
+        upper=MAX_SATELLITE_ALTITUDE_KM,
     )
 
     score_threshold = _require_finite_number(
@@ -216,9 +243,19 @@ def _is_timezone_aware(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() is not None
 
 
+def _has_fixed_utc_offset(value: datetime) -> bool:
+    return isinstance(value.tzinfo, timezone)
+
+
 __all__ = [
     "MAX_SEARCH_DURATION_MINUTES",
+    "MAX_GROUND_ELEVATION_M",
+    "MAX_SATELLITE_ALTITUDE_KM",
+    "MIN_GROUND_ELEVATION_M",
+    "MIN_SATELLITE_ALTITUDE_KM",
+    "SUPPORTED_SATELLITE_GROUPS",
     "validate_ground_station",
+    "validate_satellite_group",
     "validate_search_criteria",
     "validate_search_request",
     "validate_search_window",
