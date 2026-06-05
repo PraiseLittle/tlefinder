@@ -44,6 +44,11 @@ def _fixture_configs_by_group():
     }
 
 
+def _set_cache_mtime(path: Path, *, age: timedelta) -> None:
+    timestamp = (datetime.now(timezone.utc) - age).timestamp()
+    os.utime(path, (timestamp, timestamp))
+
+
 @pytest.mark.parametrize(
     ("filename", "group"),
     [
@@ -90,6 +95,18 @@ def test_default_source_configs_cover_each_supported_satellite_group():
     from tlefinder.core.tle_repository import DEFAULT_SOURCE_CONFIGS
 
     assert set(DEFAULT_SOURCE_CONFIGS) == set(SatelliteGroup)
+
+
+def test_default_source_configs_request_tle_format_explicitly():
+    from tlefinder.core.tle_repository import DEFAULT_SOURCE_CONFIGS
+
+    assert all("FORMAT=TLE" in config.url for config in DEFAULT_SOURCE_CONFIGS.values())
+
+
+def test_default_tle_cache_age_is_one_hour():
+    from tlefinder.core.tle_repository import DEFAULT_MAX_TLE_CACHE_AGE_HOURS
+
+    assert DEFAULT_MAX_TLE_CACHE_AGE_HOURS == 1
 
 
 @pytest.mark.parametrize(
@@ -162,8 +179,7 @@ def test_load_tle_dataset_reuses_fresh_cache_without_network(tmp_path):
     cached_path = tmp_path / "active.tle"
     shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
     as_of_utc = datetime(2026, 5, 13, 5, 0, tzinfo=timezone.utc)
-    fresh_cache_timestamp = (as_of_utc - timedelta(hours=1)).timestamp()
-    os.utime(cached_path, (fresh_cache_timestamp, fresh_cache_timestamp))
+    _set_cache_mtime(cached_path, age=timedelta(minutes=30))
 
     class OfflineClient:
         def get(self, url):
@@ -181,7 +197,7 @@ def test_load_tle_dataset_reuses_fresh_cache_without_network(tmp_path):
     assert records[0].tle.name == "ISS (ZARYA)"
 
 
-def test_load_tle_dataset_reuses_cache_with_fresh_tle_epochs_despite_old_mtime(
+def test_load_tle_dataset_refreshes_cache_older_than_one_hour(
     tmp_path,
 ):
     from tlefinder.core.tle_repository import load_tle_dataset
@@ -189,23 +205,37 @@ def test_load_tle_dataset_reuses_cache_with_fresh_tle_epochs_despite_old_mtime(
     cached_path = tmp_path / "active.tle"
     shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
     as_of_utc = datetime(2026, 5, 13, 5, 0, tzinfo=timezone.utc)
-    stale_cache_timestamp = (as_of_utc - timedelta(days=3)).timestamp()
-    os.utime(cached_path, (stale_cache_timestamp, stale_cache_timestamp))
+    _set_cache_mtime(cached_path, age=timedelta(hours=1, seconds=1))
 
-    class OfflineClient:
+    class RefreshClient:
+        def __init__(self):
+            self.urls: list[str] = []
+
         def get(self, url):
-            raise AssertionError("fresh TLE epochs should avoid network retrieval")
+            self.urls.append(url)
+
+            class Response:
+                text = (
+                    (FIXTURES_DIR / "active_sample.tle")
+                    .read_text(encoding="utf-8")
+                    .replace("ISS (ZARYA)", "DOWNLOADED ISS", 1)
+                )
+
+            return Response()
+
+    client = RefreshClient()
 
     records = load_tle_dataset(
         SatelliteGroup.ACTIVE,
         as_of_utc,
         cache_dir=tmp_path,
-        http_client=OfflineClient(),
+        http_client=client,
         source_configs=_fixture_config("active.tle"),
     )
 
+    assert client.urls == ["https://example.invalid/active.tle"]
     assert len(records) == 2
-    assert records[1].tle.name == "HST"
+    assert records[0].tle.name == "DOWNLOADED ISS"
 
 
 def test_load_tle_dataset_filters_mixed_age_cache_without_network(tmp_path):
@@ -214,6 +244,7 @@ def test_load_tle_dataset_filters_mixed_age_cache_without_network(tmp_path):
     cached_path = tmp_path / "active.tle"
     shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
     as_of_utc = datetime(2026, 5, 13, 11, 0, tzinfo=timezone.utc)
+    _set_cache_mtime(cached_path, age=timedelta(minutes=30))
 
     class OfflineClient:
         def get(self, url):
@@ -249,6 +280,7 @@ def test_load_tle_dataset_preserves_order_after_filtering_stale_records(tmp_path
         encoding="utf-8",
     )
     as_of_utc = datetime(2026, 5, 13, 11, 0, tzinfo=timezone.utc)
+    _set_cache_mtime(cached_path, age=timedelta(minutes=30))
 
     class OfflineClient:
         def get(self, url):
@@ -272,8 +304,7 @@ def test_load_tle_dataset_raises_freshness_error_for_stale_records(tmp_path):
     cached_path = tmp_path / "active.tle"
     shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
     as_of_utc = datetime(2026, 5, 13, 12, 0, 1, tzinfo=timezone.utc)
-    fresh_cache_timestamp = (as_of_utc - timedelta(minutes=5)).timestamp()
-    os.utime(cached_path, (fresh_cache_timestamp, fresh_cache_timestamp))
+    _set_cache_mtime(cached_path, age=timedelta(minutes=30))
 
     class Response:
         text = (FIXTURES_DIR / "active_sample.tle").read_text(encoding="utf-8")
@@ -288,6 +319,56 @@ def test_load_tle_dataset_raises_freshness_error_for_stale_records(tmp_path):
             as_of_utc,
             cache_dir=tmp_path,
             http_client=StaleDatasetClient(),
+            source_configs=_fixture_config("active.tle"),
+        )
+
+
+def test_load_tle_dataset_raises_load_error_when_refresh_fails_even_if_cache_tles_are_fresh(
+    tmp_path,
+):
+    from tlefinder.core.errors import TleLoadError
+    from tlefinder.core.tle_repository import load_tle_dataset
+
+    cached_path = tmp_path / "active.tle"
+    shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
+    as_of_utc = datetime(2026, 5, 13, 5, 0, tzinfo=timezone.utc)
+    _set_cache_mtime(cached_path, age=timedelta(hours=2))
+
+    class FailingClient:
+        def get(self, url):
+            raise httpx.ConnectError("network unavailable")
+
+    with pytest.raises(TleLoadError, match="refresh failed"):
+        load_tle_dataset(
+            SatelliteGroup.ACTIVE,
+            as_of_utc,
+            cache_dir=tmp_path,
+            http_client=FailingClient(),
+            source_configs=_fixture_config("active.tle"),
+        )
+
+
+def test_load_tle_dataset_raises_load_error_when_refresh_fails_and_cache_stale(
+    tmp_path,
+):
+    from tlefinder.core.errors import TleLoadError
+    from tlefinder.core.tle_repository import load_tle_dataset
+
+    cached_path = tmp_path / "active.tle"
+    shutil.copyfile(FIXTURES_DIR / "active_sample.tle", cached_path)
+    as_of_utc = datetime(2026, 5, 13, 12, 0, 1, tzinfo=timezone.utc)
+    _set_cache_mtime(cached_path, age=timedelta(hours=2))
+
+    class FailingClient:
+        def get(self, url):
+            raise httpx.ConnectError("network unavailable")
+
+    with pytest.raises(TleLoadError, match="refresh failed"):
+        load_tle_dataset(
+            SatelliteGroup.ACTIVE,
+            as_of_utc,
+            cache_dir=tmp_path,
+            http_client=FailingClient(),
             source_configs=_fixture_config("active.tle"),
         )
 
@@ -307,6 +388,46 @@ def test_download_tle_dataset_wraps_retrieval_failure(tmp_path):
             http_client=FailingClient(),
             source_configs=_fixture_config("active.tle"),
         )
+
+
+def test_download_tle_dataset_default_httpx_client_ignores_environment_proxies(
+    monkeypatch,
+    tmp_path,
+):
+    from tlefinder.core import tle_repository
+    from tlefinder.core.tle_repository import download_tle_dataset
+
+    client_kwargs: list[dict[str, object]] = []
+    requested_urls: list[str] = []
+
+    class Response:
+        text = (FIXTURES_DIR / "active_sample.tle").read_text(encoding="utf-8")
+
+    class FakeHttpxClient:
+        def __init__(self, **kwargs):
+            client_kwargs.append(kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def get(self, url):
+            requested_urls.append(url)
+            return Response()
+
+    monkeypatch.setattr(tle_repository.httpx, "Client", FakeHttpxClient)
+
+    downloaded_path = download_tle_dataset(
+        SatelliteGroup.ACTIVE,
+        cache_dir=tmp_path,
+        source_configs=_fixture_config("active.tle"),
+    )
+
+    assert client_kwargs == [{"timeout": 20.0, "trust_env": False}]
+    assert requested_urls == ["https://example.invalid/active.tle"]
+    assert downloaded_path == tmp_path / "active.tle"
 
 
 def test_parse_tle_file_wraps_malformed_file(tmp_path):

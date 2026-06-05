@@ -102,12 +102,18 @@ def test_default_settings_use_backend_controlled_station_store_path(monkeypatch)
     from tlefinder.api.config import resolve_api_settings
 
     monkeypatch.delenv("TLEFINDER_STATION_STORE_PATH", raising=False)
+    monkeypatch.delenv("TLEFINDER_PARALLEL_SEARCH_ENABLED", raising=False)
+    monkeypatch.delenv("TLEFINDER_PARALLEL_WORKER_COUNT", raising=False)
+    monkeypatch.delenv("TLEFINDER_PARALLEL_CHUNK_SIZE", raising=False)
 
     settings = resolve_api_settings()
 
     assert settings.station_store_path.name == "stations.yaml"
     assert settings.station_store_path.parent.name == "data"
     assert "core" not in settings.station_store_path.parts
+    assert settings.parallel_search_enabled is False
+    assert settings.parallel_worker_count == 4
+    assert settings.parallel_chunk_size == 32
 
 
 def test_environment_can_override_station_store_path(monkeypatch, tmp_path):
@@ -119,3 +125,20 @@ def test_environment_can_override_station_store_path(monkeypatch, tmp_path):
     settings = resolve_api_settings()
 
     assert settings.station_store_path == configured_path
+
+
+def test_environment_can_enable_server_controlled_parallel_search(monkeypatch, tmp_path):
+    from tlefinder.api.config import resolve_api_settings
+
+    configured_path = tmp_path / "custom-stations.yaml"
+    monkeypatch.setenv("TLEFINDER_STATION_STORE_PATH", str(configured_path))
+    monkeypatch.setenv("TLEFINDER_PARALLEL_SEARCH_ENABLED", "true")
+    monkeypatch.setenv("TLEFINDER_PARALLEL_WORKER_COUNT", "3")
+    monkeypatch.setenv("TLEFINDER_PARALLEL_CHUNK_SIZE", "16")
+
+    settings = resolve_api_settings()
+
+    assert settings.station_store_path == configured_path
+    assert settings.parallel_search_enabled is True
+    assert settings.parallel_worker_count == 3
+    assert settings.parallel_chunk_size == 16

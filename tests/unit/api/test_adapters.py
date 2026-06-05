@@ -473,6 +473,49 @@ def test_core_response_serialization_preserves_geometry_angles_metrics_and_diagn
     }
 
 
+def test_core_response_serialization_preserves_budget_and_parallel_diagnostics():
+    from tlefinder.api.adapters import core_response_to_api_response
+    from tlefinder.core.models import SearchResponse as CoreSearchResponse
+    from tlefinder.core.models import SearchStatus
+
+    diagnostics = {
+        "candidate_budget": {
+            "requested": True,
+            "enabled": True,
+            "disabled_reason": None,
+            "candidate_budget": 60,
+            "budget_reached": True,
+            "processed_satellite_count": 128,
+            "unprocessed_satellite_count": 64,
+            "processed_candidate_count": 62,
+            "returned_candidate_count": 10,
+            "approximate": True,
+            "approximation_note": (
+                "Budgeted results are approximate because unseen satellites might "
+                "have scored higher."
+            ),
+        },
+        "parallel_search": {
+            "enabled": True,
+            "backend": "process_pool",
+            "requested_workers": 4,
+            "effective_workers": 4,
+            "chunk_size": 32,
+            "chunk_count": 6,
+        },
+    }
+
+    api_response = core_response_to_api_response(
+        CoreSearchResponse(
+            results=[candidate_pass()],
+            status=SearchStatus.RESULTS,
+            diagnostics=diagnostics,
+        )
+    )
+
+    assert api_response.model_dump(mode="json")["diagnostics"] == diagnostics
+
+
 def test_core_no_result_response_serializes_as_empty_success_payload():
     from tlefinder.api.adapters import core_response_to_api_response
     from tlefinder.core.models import SearchResponse as CoreSearchResponse

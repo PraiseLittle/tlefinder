@@ -18,7 +18,7 @@ def test_simple_search_returns_ranked_result_from_controlled_core_response(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda core_request: core_result_response(),
+        lambda core_request, **kwargs: core_result_response(),
     )
 
     response = client.post("/api/v1/search/simple", json=simple_search_payload())
@@ -45,7 +45,7 @@ def test_simple_search_defaults_are_visible_in_core_request(
     client, _store_path = api_client_factory()
     captured_requests = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         captured_requests.append(core_request)
         return core_no_result_response()
 
@@ -83,7 +83,7 @@ def test_simple_search_no_result_returns_success_with_empty_results(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda core_request: core_no_result_response(),
+        lambda core_request, **kwargs: core_no_result_response(),
     )
 
     response = client.post(
@@ -110,7 +110,7 @@ def test_named_station_from_successful_simple_search_is_persisted(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda core_request: core_no_result_response(),
+        lambda core_request, **kwargs: core_no_result_response(),
     )
 
     search_response = client.post(
@@ -132,7 +132,7 @@ def test_invalid_simple_search_request_does_not_call_core(
 
     client, _store_path = api_client_factory()
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         pytest.fail("core search must not run after request validation failure")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
@@ -160,7 +160,7 @@ def test_advanced_search_maps_supported_criteria_into_core_request(
     client, _store_path = api_client_factory()
     captured_requests = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         captured_requests.append(core_request)
         return core_no_result_response()
 
@@ -192,7 +192,7 @@ def test_unsupported_advanced_criteria_return_machine_readable_422(
 
     client, _store_path = api_client_factory()
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         pytest.fail("core search must not run for unsupported API criteria")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
@@ -223,7 +223,7 @@ def test_advanced_search_passes_threshold_and_result_limit_to_core(
     client, _store_path = api_client_factory()
     captured_requests = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         captured_requests.append(core_request)
         return core_no_result_response()
 
@@ -258,7 +258,7 @@ def test_supported_satellite_groups_are_accepted(
     client, _store_path = api_client_factory()
     captured_requests = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         captured_requests.append(core_request)
         return core_no_result_response()
 
@@ -282,7 +282,7 @@ def test_invalid_satellite_group_returns_machine_readable_validation_error(
 
     client, _store_path = api_client_factory()
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         pytest.fail("core search must not run for invalid satellite groups")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)

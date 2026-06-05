@@ -34,7 +34,7 @@ def test_expected_core_errors_return_documented_machine_readable_payloads(
     client, _store_path = api_client_factory()
     exception_cls = getattr(core_errors, exception_name)
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         raise exception_cls("controlled core failure")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
@@ -63,7 +63,7 @@ def test_station_persistence_failure_after_successful_search_returns_store_error
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda core_request: core_no_result_response(),
+        lambda core_request, **kwargs: core_no_result_response(),
     )
 
     response = client.post("/api/v1/search/simple", json=simple_search_payload())
@@ -81,7 +81,7 @@ def test_unexpected_errors_return_generic_internal_error_payload(
 
     client, _store_path = api_client_factory(raise_server_exceptions=False)
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         raise RuntimeError("secret backend implementation detail")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)

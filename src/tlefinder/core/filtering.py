@@ -29,6 +29,40 @@ def filter_candidate_passes(
     return accepted
 
 
+def filter_geometry_candidate_passes(
+    candidates: list[CandidatePass],
+    criteria: SearchCriteria,
+) -> list[CandidatePass]:
+    """Return candidates satisfying hard constraints derived from geometry only."""
+
+    accepted: list[CandidatePass] = []
+    for candidate in candidates:
+        rejection_reasons = _geometry_rejection_reasons(candidate, criteria)
+        if rejection_reasons:
+            _record_rejection_reasons(candidate, rejection_reasons)
+            continue
+        accepted.append(candidate)
+
+    return accepted
+
+
+def filter_metric_candidate_passes(
+    candidates: list[CandidatePass],
+    criteria: SearchCriteria,
+) -> list[CandidatePass]:
+    """Return candidates satisfying hard constraints that require pass metrics."""
+
+    accepted: list[CandidatePass] = []
+    for candidate in candidates:
+        rejection_reasons = _metric_rejection_reasons(candidate, criteria)
+        if rejection_reasons:
+            _record_rejection_reasons(candidate, rejection_reasons)
+            continue
+        accepted.append(candidate)
+
+    return accepted
+
+
 def matches_culmination_constraints(
     candidate: CandidatePass,
     criteria: SearchCriteria,
@@ -91,6 +125,10 @@ def matches_satellite_altitude_constraints(
 ) -> bool:
     """Check orbital altitude constraints."""
 
+    if criteria.satellite_altitude_km is None:
+        return True
+    if candidate.metrics.satellite_altitude_km is None:
+        return False
     return _matches_range(
         candidate.metrics.satellite_altitude_km,
         criteria.satellite_altitude_km,
@@ -101,11 +139,29 @@ def _rejection_reasons(
     candidate: CandidatePass,
     criteria: SearchCriteria,
 ) -> list[str]:
+    return [
+        *_geometry_rejection_reasons(candidate, criteria),
+        *_metric_rejection_reasons(candidate, criteria),
+    ]
+
+
+def _geometry_rejection_reasons(
+    candidate: CandidatePass,
+    criteria: SearchCriteria,
+) -> list[str]:
     reasons: list[str] = []
     if not matches_culmination_constraints(candidate, criteria):
         reasons.append("culmination_altitude")
     if not matches_azimuth_constraints(candidate, criteria):
         reasons.append("azimuth")
+    return reasons
+
+
+def _metric_rejection_reasons(
+    candidate: CandidatePass,
+    criteria: SearchCriteria,
+) -> list[str]:
+    reasons: list[str] = []
     if not matches_sun_proximity_constraints(candidate, criteria):
         reasons.append("sun_proximity")
     if not matches_satellite_altitude_constraints(candidate, criteria):
@@ -162,6 +218,8 @@ def _circular_distance_deg(first: float, second: float) -> float:
 
 __all__ = [
     "filter_candidate_passes",
+    "filter_geometry_candidate_passes",
+    "filter_metric_candidate_passes",
     "matches_azimuth_constraints",
     "matches_culmination_constraints",
     "matches_satellite_altitude_constraints",

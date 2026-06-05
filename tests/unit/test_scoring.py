@@ -227,24 +227,7 @@ def test_duration_score_is_normalized_on_zero_to_100_scale(
     ) == pytest.approx(expected_score)
 
 
-def test_pass_timing_uses_observable_start_inside_search_window():
-    from tlefinder.core.scoring import compute_observable_start_time_utc
-
-    interval = _interval()
-    partial_window_candidate = _candidate(start_offset_minutes=-3.0)
-    in_window_candidate = _candidate(start_offset_minutes=4.0)
-
-    assert compute_observable_start_time_utc(
-        partial_window_candidate,
-        interval[0],
-    ) == interval[0]
-    assert compute_observable_start_time_utc(
-        in_window_candidate,
-        interval[0],
-    ) == in_window_candidate.geometry.start_time_utc
-
-
-def test_already_observable_pass_scores_earlier_than_later_pass():
+def test_pass_timing_uses_actual_start_not_clipped_window_start():
     from tlefinder.core.models import SearchCriteria
     from tlefinder.core.scoring import score_pass_timing_fit
 
@@ -252,7 +235,52 @@ def test_already_observable_pass_scores_earlier_than_later_pass():
     interval = _interval()
 
     assert score_pass_timing_fit(
-        _candidate(start_offset_minutes=-2.0),
+        _candidate(start_offset_minutes=-1.0),
+        criteria,
+        interval,
+    ) > score_pass_timing_fit(
+        _candidate(start_offset_minutes=-5.0),
+        criteria,
+        interval,
+    )
+
+
+def test_after_start_pass_scores_higher_than_before_start_pass():
+    from tlefinder.core.models import SearchCriteria
+    from tlefinder.core.scoring import score_pass_timing_fit
+
+    criteria = SearchCriteria()
+    interval = _interval()
+
+    assert score_pass_timing_fit(
+        _candidate(start_offset_minutes=9.0),
+        criteria,
+        interval,
+    ) > score_pass_timing_fit(
+        _candidate(start_offset_minutes=-0.5),
+        criteria,
+        interval,
+    )
+    assert score_pass_timing_fit(
+        _candidate(start_offset_minutes=1.0),
+        criteria,
+        interval,
+    ) > score_pass_timing_fit(
+        _candidate(start_offset_minutes=-1.0),
+        criteria,
+        interval,
+    )
+
+
+def test_after_start_timing_prefers_closer_pass_starts():
+    from tlefinder.core.models import SearchCriteria
+    from tlefinder.core.scoring import score_pass_timing_fit
+
+    criteria = SearchCriteria()
+    interval = _interval()
+
+    assert score_pass_timing_fit(
+        _candidate(start_offset_minutes=1.0),
         criteria,
         interval,
     ) > score_pass_timing_fit(
@@ -265,11 +293,14 @@ def test_already_observable_pass_scores_earlier_than_later_pass():
 @pytest.mark.parametrize(
     ("start_offset_minutes", "expected_score"),
     [
-        (-4.0, 100.0),
+        (-12.0, 0.0),
+        (-10.0, 0.0),
+        (-5.0, 25.0),
+        (-1.0, 45.0),
         (0.0, 100.0),
-        (5.0, 50.0),
-        (9.0, 10.0),
-        (10.0, 0.0),
+        (1.0, 95.0),
+        (5.0, 75.0),
+        (10.0, 50.0),
         (12.0, 0.0),
     ],
 )
@@ -287,7 +318,7 @@ def test_timing_score_is_normalized_on_zero_to_100_scale(
     ) == pytest.approx(expected_score)
 
 
-def test_equal_duration_and_equal_observable_timing_produce_equal_component_scores():
+def test_in_progress_passes_no_longer_all_receive_perfect_timing_score():
     from tlefinder.core.models import SearchCriteria
     from tlefinder.core.scoring import score_pass_duration_fit, score_pass_timing_fit
 
@@ -299,9 +330,8 @@ def test_equal_duration_and_equal_observable_timing_produce_equal_component_scor
     assert score_pass_duration_fit(first, criteria, interval) == pytest.approx(
         score_pass_duration_fit(second, criteria, interval)
     )
-    assert score_pass_timing_fit(first, criteria, interval) == pytest.approx(
-        score_pass_timing_fit(second, criteria, interval)
-    )
+    assert score_pass_timing_fit(first, criteria, interval) == pytest.approx(25.0)
+    assert score_pass_timing_fit(second, criteria, interval) == pytest.approx(45.0)
 
 
 def test_default_request_no_longer_gives_every_candidate_neutral_100_score():
@@ -332,7 +362,7 @@ def test_default_scoring_combines_duration_and_timing_deterministically():
         interval,
     ).match_score
 
-    assert first_score == pytest.approx((60.0 + 80.0) / 2.0)
+    assert first_score == pytest.approx((60.0 + 90.0) / 2.0)
     assert second_score == pytest.approx(first_score)
 
 

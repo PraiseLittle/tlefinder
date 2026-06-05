@@ -65,13 +65,14 @@ def advanced_search_payload(**overrides):
     return payload
 
 
-def api_client(tmp_path, *, raise_server_exceptions=True):
+def api_client(tmp_path, *, raise_server_exceptions=True, settings=None):
     from tlefinder.api.app import create_app
     from tlefinder.api.config import ApiSettings
 
     store_path = tmp_path / "stations.yaml"
+    resolved_settings = settings or ApiSettings(station_store_path=store_path)
     client = TestClient(
-        create_app(ApiSettings(station_store_path=store_path)),
+        create_app(resolved_settings),
         raise_server_exceptions=raise_server_exceptions,
     )
     return client, store_path
@@ -144,11 +145,13 @@ def test_simple_search_adapts_request_and_calls_core_once(
 
     client, _store_path = api_client(tmp_path)
     received_requests = []
+    received_kwargs = []
     events = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         events.append("search")
         received_requests.append(core_request)
+        received_kwargs.append(kwargs)
         return core_result_response()
 
     def add_station_if_new(path, station):
@@ -170,6 +173,7 @@ def test_simple_search_adapts_request_and_calls_core_once(
     assert core_request.satellite_group is SatelliteGroup.ACTIVE
     assert core_request.criteria.result_limit == 10
     assert core_request.criteria.score_threshold == 0.0
+    assert received_kwargs == [{"approximate_budgeted": True}]
     assert response.json()["results"][0]["rank"] == 1
     assert events == ["search", "persist"]
 
@@ -180,9 +184,11 @@ def test_advanced_search_adapts_request_and_calls_core_once(monkeypatch, tmp_pat
 
     client, _store_path = api_client(tmp_path)
     received_requests = []
+    received_kwargs = []
 
-    def search_candidates(core_request):
+    def search_candidates(core_request, **kwargs):
         received_requests.append(core_request)
+        received_kwargs.append(kwargs)
         return core_no_result_response()
 
     monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
@@ -202,6 +208,84 @@ def test_advanced_search_adapts_request_and_calls_core_once(monkeypatch, tmp_pat
     assert core_request.criteria.start_azimuth_deg.target == 270.0
     assert core_request.criteria.result_limit == 5
     assert core_request.criteria.score_threshold == 60.0
+    assert received_kwargs == [{}]
+
+
+def test_simple_search_uses_server_configured_parallel_budgeted_mode(
+    monkeypatch,
+    tmp_path,
+):
+    from tlefinder.api.config import ApiSettings
+    from tlefinder.api.routers import search as search_routes
+    from tlefinder.core import pass_analysis
+
+    settings = ApiSettings(
+        station_store_path=tmp_path / "stations.yaml",
+        parallel_search_enabled=True,
+        parallel_worker_count=4,
+        parallel_chunk_size=16,
+    )
+    client, _store_path = api_client(tmp_path, settings=settings)
+    received_kwargs = []
+
+    def search_candidates(core_request, **kwargs):
+        received_kwargs.append(kwargs)
+        return core_no_result_response()
+
+    monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
+    monkeypatch.setattr(
+        search_routes.station_store,
+        "add_station_if_new",
+        lambda *args: [],
+    )
+
+    response = client.post("/api/v1/search/simple", json=simple_search_payload())
+
+    assert response.status_code == 200
+    assert len(received_kwargs) == 1
+    assert received_kwargs[0]["approximate_budgeted"] is True
+    config = received_kwargs[0]["parallel_search"]
+    assert isinstance(config, pass_analysis.ParallelSearchConfig)
+    assert config.enabled is True
+    assert config.requested_worker_count == 4
+    assert config.effective_worker_count == 4
+    assert config.chunk_size == 16
+
+
+def test_advanced_search_uses_server_configured_exact_parallel_mode(
+    monkeypatch,
+    tmp_path,
+):
+    from tlefinder.api.config import ApiSettings
+    from tlefinder.api.routers import search as search_routes
+    from tlefinder.core import pass_analysis
+
+    settings = ApiSettings(
+        station_store_path=tmp_path / "stations.yaml",
+        parallel_search_enabled=True,
+        parallel_worker_count=3,
+        parallel_chunk_size=8,
+    )
+    client, _store_path = api_client(tmp_path, settings=settings)
+    received_kwargs = []
+
+    def search_candidates(core_request, **kwargs):
+        received_kwargs.append(kwargs)
+        return core_no_result_response()
+
+    monkeypatch.setattr(search_routes.core, "search_candidates", search_candidates)
+
+    response = client.post("/api/v1/search/advanced", json=advanced_search_payload())
+
+    assert response.status_code == 200
+    assert len(received_kwargs) == 1
+    assert "approximate_budgeted" not in received_kwargs[0]
+    config = received_kwargs[0]["parallel_search"]
+    assert isinstance(config, pass_analysis.ParallelSearchConfig)
+    assert config.enabled is True
+    assert config.requested_worker_count == 3
+    assert config.effective_worker_count == 3
+    assert config.chunk_size == 8
 
 
 def test_search_routes_delegate_domain_workflow_to_core_entrypoint(
@@ -228,7 +312,7 @@ def test_search_routes_delegate_domain_workflow_to_core_entrypoint(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda request: core_no_result_response(),
+        lambda request, **kwargs: core_no_result_response(),
     )
     monkeypatch.setattr(
         search_routes.station_store,
@@ -251,7 +335,7 @@ def test_no_result_core_response_returns_http_200_success_payload(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda request: core_no_result_response(),
+        lambda request, **kwargs: core_no_result_response(),
     )
     monkeypatch.setattr(
         search_routes.station_store,
@@ -275,7 +359,7 @@ def test_named_stations_are_not_persisted_when_search_execution_fails(
 
     client, _store_path = api_client(tmp_path)
 
-    def fail_search(core_request):
+    def fail_search(core_request, **kwargs):
         raise TleLoadError("TLE data unavailable")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", fail_search)
@@ -301,7 +385,7 @@ def test_unnamed_search_station_is_not_persisted_after_success(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda request: core_no_result_response(),
+        lambda request, **kwargs: core_no_result_response(),
     )
     monkeypatch.setattr(
         search_routes.station_store,
@@ -328,7 +412,7 @@ def test_persistence_failure_after_successful_search_returns_explicit_error(
     monkeypatch.setattr(
         search_routes.core,
         "search_candidates",
-        lambda request: core_no_result_response(),
+        lambda request, **kwargs: core_no_result_response(),
     )
 
     def fail_persistence(path, station):

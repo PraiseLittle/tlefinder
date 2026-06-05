@@ -16,6 +16,7 @@ from tlefinder.api.schemas import (
     SimpleSearchRequest,
 )
 import tlefinder.core as core
+import tlefinder.core.pass_analysis as pass_analysis
 
 router = APIRouter(tags=["search"])
 
@@ -183,6 +184,7 @@ def simple_search(
         body,
         request,
         adapters.simple_search_to_core_request,
+        approximate_budgeted=True,
     )
 
 
@@ -238,11 +240,32 @@ def _execute_search(
         [SimpleSearchRequest | AdvancedSearchRequest],
         core.SearchRequest,
     ],
+    *,
+    approximate_budgeted: bool = False,
 ) -> SearchResponse:
     core_request = adapt_request(body)
-    core_response = core.search_candidates(core_request)
+    search_kwargs = {}
+    if approximate_budgeted:
+        search_kwargs["approximate_budgeted"] = True
+    parallel_search = _parallel_search_config_from_request(request)
+    if parallel_search is not None:
+        search_kwargs["parallel_search"] = parallel_search
+    core_response = core.search_candidates(core_request, **search_kwargs)
     _persist_named_station_after_success(_station_store_path(request), body.station)
     return adapters.core_response_to_api_response(core_response)
+
+
+def _parallel_search_config_from_request(
+    request: Request,
+) -> pass_analysis.ParallelSearchConfig | None:
+    settings = request.app.state.api_settings
+    if not settings.parallel_search_enabled:
+        return None
+    return pass_analysis.derive_default_parallel_search_config(
+        enabled=True,
+        requested_worker_count=settings.parallel_worker_count,
+        chunk_size=settings.parallel_chunk_size,
+    )
 
 
 def _persist_named_station_after_success(

@@ -198,3 +198,51 @@ def test_filter_candidate_passes_keeps_matches_and_records_rejection_reasons():
 
     assert filter_candidate_passes([accepted, rejected], criteria) == [accepted]
     assert rejected.diagnostics["rejection_reasons"] == ["culmination_altitude"]
+
+
+def test_geometry_filter_rejects_before_metric_dependent_constraints_are_needed():
+    from tlefinder.core.filtering import filter_geometry_candidate_passes
+    from tlefinder.core.models import PassMetrics, RangeConstraint, SearchCriteria
+
+    accepted = _candidate(catalog_number=1, culmination_altitude_deg=50.0)
+    rejected = _candidate(catalog_number=2, culmination_altitude_deg=20.0)
+    accepted.metrics = PassMetrics(satellite_altitude_km=None, sun_proximity_deg=None)
+    rejected.metrics = PassMetrics(satellite_altitude_km=None, sun_proximity_deg=None)
+    criteria = SearchCriteria(
+        culmination_altitude_deg=RangeConstraint(minimum=30.0, maximum=70.0),
+        sun_proximity_deg=RangeConstraint(minimum=15.0, maximum=30.0),
+        satellite_altitude_km=RangeConstraint(minimum=400.0, maximum=500.0),
+    )
+
+    assert filter_geometry_candidate_passes([accepted, rejected], criteria) == [accepted]
+    assert rejected.diagnostics["rejection_reasons"] == ["culmination_altitude"]
+    assert "rejection_reasons" not in accepted.diagnostics
+
+
+def test_metric_filter_runs_after_required_metrics_are_available():
+    from tlefinder.core.filtering import filter_metric_candidate_passes
+    from tlefinder.core.models import PassMetrics, RangeConstraint, SearchCriteria
+
+    accepted = _candidate(catalog_number=1)
+    rejected = _candidate(catalog_number=2)
+    accepted.metrics = PassMetrics(satellite_altitude_km=420.0, sun_proximity_deg=20.0)
+    rejected.metrics = PassMetrics(satellite_altitude_km=420.0, sun_proximity_deg=35.0)
+    missing_metric = _candidate(catalog_number=3)
+    missing_metric.metrics = PassMetrics(
+        satellite_altitude_km=None,
+        sun_proximity_deg=None,
+    )
+    criteria = SearchCriteria(
+        sun_proximity_deg=RangeConstraint(minimum=15.0, maximum=30.0),
+        satellite_altitude_km=RangeConstraint(minimum=400.0, maximum=500.0),
+    )
+
+    assert filter_metric_candidate_passes(
+        [accepted, rejected, missing_metric],
+        criteria,
+    ) == [accepted]
+    assert rejected.diagnostics["rejection_reasons"] == ["sun_proximity"]
+    assert missing_metric.diagnostics["rejection_reasons"] == [
+        "sun_proximity",
+        "satellite_altitude",
+    ]

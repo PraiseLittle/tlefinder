@@ -132,7 +132,7 @@ class PassGeometry:
 class PassMetrics:
     """Derived pass-level values used by filtering and scoring."""
 
-    satellite_altitude_km: float
+    satellite_altitude_km: float | None = None
     sun_proximity_deg: float | None = None
 
 

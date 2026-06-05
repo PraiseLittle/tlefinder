@@ -324,6 +324,10 @@ Purpose: detect candidate passes, extract pass geometry, and compute pass-level 
 - it does not reject or rank candidates
 - propagation and pass metrics are grouped together because they use the same orbital context and the same external libraries
 - `satellite_altitude_km` is the mean altitude over the full pass
+- satellite pass-geometry propagation is the primary parallel workload
+- parallel pass-geometry execution must build Skyfield objects inside each worker and must not share a `PassAnalysisSession` across worker boundaries
+- TLE loading, validation, filtering, scoring, ranking, result limiting, and metric completion remain serial for the first parallel-search contract
+- the first backend contract is process-pool execution, hidden behind a small pass-analysis boundary so later phases can add the real worker scheduler without changing engine orchestration
 
 ### 5.7 `filtering.py`
 
@@ -451,6 +455,91 @@ Response contract:
 9. rank candidates
 10. limit the result count
 11. build the shared response model
+
+#### Approximate candidate budgeting
+
+The engine supports an opt-in approximate budgeted mode. Exact search remains
+the default behavior and is selected by not requesting approximate budgeting.
+The first budgeted increment does not add fields to `SearchRequest`; Python
+callers request it through the engine entrypoint options.
+
+Budgeted mode applies only when all of these conditions are true:
+
+- the caller requested approximate budgeting
+- `satellite_group` is `ACTIVE`
+- no strict hard filters are present in `SearchCriteria`
+
+When the policy applies, the internal candidate budget is
+`criteria.result_limit * 6`. Pass analysis processes TLE records in their
+deterministic loaded order and stops propagating additional satellites once the
+candidate shortlist reaches that budget. Scoring, thresholding, ranking, and
+result limiting are then performed only against the processed shortlist.
+
+Budgeted results are approximate when the budget is reached because unseen
+satellites might have produced higher-scoring candidates. Searches with strict
+geometry or metric filters stay exact even if budgeting was requested, because
+early stopping can otherwise prevent the engine from finding enough accepted
+candidates.
+
+Public diagnostics report whether budgeting was requested and enabled, the
+configured candidate budget, whether the budget was reached, processed and
+unprocessed satellite counts, processed candidate count, returned candidate
+count, and an approximation note when results are not exact.
+
+#### Parallel pass-geometry contract
+
+The core supports exact serial search, exact parallel pass-geometry search, and
+approximate budgeted parallel pass-geometry search. Exact serial search remains
+the default behavior and is selected by omitting both execution options. Python
+callers request exact parallel mode by passing `parallel_search` without
+`approximate_budgeted`, and request approximate parallel mode by passing both
+`parallel_search` and `approximate_budgeted=True`.
+
+The configuration records whether parallel search is enabled, requested and
+effective worker counts, chunk size, backend name, and any fallback reason. A
+single-worker request is normalized to serial execution. Invalid worker counts,
+unbounded worker counts, unsupported backends, and invalid chunk sizes are
+rejected before propagation work starts.
+
+When the option is present, diagnostics include `parallel_search.enabled`,
+`parallel_search.backend`, `parallel_search.requested_workers`,
+`parallel_search.effective_workers`, `parallel_search.chunk_size`,
+`parallel_search.chunk_count`, and `parallel_search.fallback_reason` when the
+execution falls back to serial. Default serial search does not include these
+parallel diagnostics.
+
+Phase 20 combines approximate budgeting with parallel pass geometry. Parallel
+work is scheduled in deterministic waves bounded by the effective worker count.
+Completed wave chunks are merged in original input-record order before the
+candidate budget is checked. Once the budget is reached, no later waves are
+scheduled; already-running chunks from the current wave are allowed to finish and
+are included in processed satellite and candidate diagnostics. This means a
+budgeted parallel shortlist can contain more candidates than the configured
+budget when the final completed wave crosses the budget.
+
+The HTTP API does not expose raw mode, worker-count, or chunk-size controls in
+request bodies. Server configuration controls API parallel execution. By
+default, API parallel search is disabled. When enabled, the default deployment
+shape is four process workers and chunk size `32`, which is the Windows
+development default. The simple-search route requests approximate budgeting and
+therefore becomes approximate parallel when server-side parallel execution is
+enabled and the budget policy applies. Advanced search remains exact by default
+and becomes exact parallel when server-side parallel execution is enabled. The
+GUI relies on API defaults and does not expose a mode toggle.
+
+Phase 21 benchmark results keep exact serial search as the default release
+policy. Exact parallel search is not automatic for active-group searches because
+the measured Windows total-runtime results did not show a consistent speedup,
+even when pass-analysis time improved. Deployments can still opt in through
+server configuration. The conservative enabled defaults are four process
+workers and chunk size `32`; strict operational searches can preserve exact
+behavior by omitting approximate budgeting. The feature can be disabled quickly
+by setting API parallel search off or by omitting `parallel_search` from direct
+Python callers.
+
+Large pass-analysis diagnostics cap per-satellite skipped-record details while
+preserving aggregate skipped counts. This keeps active-group diagnostics
+JSON-friendly without returning excessive per-satellite data.
 
 #### Current-code mapping
 

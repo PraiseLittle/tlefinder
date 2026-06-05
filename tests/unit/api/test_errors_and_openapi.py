@@ -115,7 +115,7 @@ def test_core_exceptions_map_to_stable_error_codes(
 
     client = api_client(tmp_path)
 
-    def fail_search(core_request):
+    def fail_search(core_request, **kwargs):
         raise exception_factory()
 
     monkeypatch.setattr(search_routes.core, "search_candidates", fail_search)
@@ -189,7 +189,7 @@ def test_unexpected_exceptions_map_to_generic_internal_error_without_traceback(
 
     client = api_client(tmp_path, raise_server_exceptions=False)
 
-    def fail_search(core_request):
+    def fail_search(core_request, **kwargs):
         raise RuntimeError("secret backend implementation detail")
 
     monkeypatch.setattr(search_routes.core, "search_candidates", fail_search)

@@ -19,6 +19,10 @@ dependencies = [
     "pyyaml>=6.0,<7.0",
 ]
 
+[project.scripts]
+tlefinder-dev = "tlefinder.dev:main"
+tlefinder-benchmark-core = "tlefinder.benchmarks.core_search:main"
+
 [tool.poetry]
 packages = [{ include = "tlefinder", from = "src" }]
 

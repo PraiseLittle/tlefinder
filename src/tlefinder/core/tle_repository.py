@@ -15,6 +15,7 @@ from tlefinder.core.errors import TleFreshnessError, TleLoadError
 from tlefinder.core.models import SatelliteGroup, SatelliteRecord, TleRecord
 
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "tlefinder" / "tle"
+DEFAULT_MAX_TLE_CACHE_AGE_HOURS = 1
 DEFAULT_MAX_TLE_AGE_HOURS = 24
 
 
@@ -34,15 +35,15 @@ class HttpClient(Protocol):
 
 DEFAULT_SOURCE_CONFIGS: dict[SatelliteGroup, TleSourceConfig] = {
     SatelliteGroup.ACTIVE: TleSourceConfig(
-        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle",
+        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=TLE",
         cache_filename="active.tle",
     ),
     SatelliteGroup.VISUAL: TleSourceConfig(
-        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle",
+        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=TLE",
         cache_filename="visual.tle",
     ),
     SatelliteGroup.AMATEUR: TleSourceConfig(
-        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=tle",
+        url="https://celestrak.org/NORAD/elements/gp.php?GROUP=amateur&FORMAT=TLE",
         cache_filename="amateur.tle",
     ),
 }
@@ -62,7 +63,7 @@ def load_tle_dataset(
     config = _source_config_for(group, source_configs)
     cache_path = _cache_path(cache_dir, config)
 
-    if cache_path.exists():
+    if cache_path.exists() and _is_cache_file_fresh(cache_path):
         cached_records = _parse_tle_file(cache_path, source_group=group)
         fresh_records, freshness_metadata = _filter_fresh_records_with_metadata(
             cached_records,
@@ -75,12 +76,21 @@ def load_tle_dataset(
                 dataset_metadata=freshness_metadata,
             )
 
-    source_path = download_tle_dataset(
-        group,
-        cache_dir=cache_dir,
-        http_client=http_client,
-        source_configs=source_configs,
-    )
+    try:
+        source_path = download_tle_dataset(
+            group,
+            cache_dir=cache_dir,
+            http_client=http_client,
+            source_configs=source_configs,
+        )
+    except TleLoadError as exc:
+        if not cache_path.exists():
+            raise
+
+        raise TleLoadError(
+            f"cached TLE dataset for {group.value} is older than "
+            f"{DEFAULT_MAX_TLE_CACHE_AGE_HOURS:g} hour and refresh failed"
+        ) from exc
 
     tle_records = _parse_tle_file(source_path, source_group=group)
     fresh_records, freshness_metadata = _filter_fresh_records_with_metadata(
@@ -89,11 +99,10 @@ def load_tle_dataset(
         max_age_hours=max_age_hours,
     )
     if not fresh_records:
-        raise TleFreshnessError(
-            f"no fresh TLE records remain for {group.value} within "
-            f"{max_age_hours:g} hours "
-            f"({freshness_metadata['stale_record_count']} stale of "
-            f"{freshness_metadata['total_record_count']} total)"
+        raise _no_fresh_tle_records_error(
+            group,
+            max_age_hours=max_age_hours,
+            freshness_metadata=freshness_metadata,
         )
 
     return build_satellite_records(
@@ -234,7 +243,7 @@ def _download_text(url: str, *, http_client: HttpClient | None) -> str:
     if http_client is not None:
         response = http_client.get(url)
     else:
-        with httpx.Client(timeout=20.0) as client:
+        with httpx.Client(timeout=20.0, trust_env=False) as client:
             response = client.get(url)
 
     if hasattr(response, "raise_for_status"):
@@ -365,6 +374,30 @@ def _cache_path(
     return directory / config.cache_filename
 
 
+def _is_cache_file_fresh(path: Path) -> bool:
+    try:
+        modified_at_utc = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    except OSError:
+        return False
+
+    max_age = timedelta(hours=DEFAULT_MAX_TLE_CACHE_AGE_HOURS)
+    return datetime.now(timezone.utc) - modified_at_utc <= max_age
+
+
+def _no_fresh_tle_records_error(
+    group: SatelliteGroup,
+    *,
+    max_age_hours: int,
+    freshness_metadata: dict[str, int | float],
+) -> TleFreshnessError:
+    return TleFreshnessError(
+        f"no fresh TLE records remain for {group.value} within "
+        f"{max_age_hours:g} hours "
+        f"({freshness_metadata['stale_record_count']} stale of "
+        f"{freshness_metadata['total_record_count']} total)"
+    )
+
+
 def _require_aware_utc(value: datetime, *, name: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{name} must be timezone-aware")
@@ -373,6 +406,7 @@ def _require_aware_utc(value: datetime, *, name: str) -> datetime:
 
 __all__ = [
     "DEFAULT_CACHE_DIR",
+    "DEFAULT_MAX_TLE_CACHE_AGE_HOURS",
     "DEFAULT_MAX_TLE_AGE_HOURS",
     "DEFAULT_SOURCE_CONFIGS",
     "TleSourceConfig",

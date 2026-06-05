@@ -23,7 +23,7 @@ def compute_match_score(
 ) -> CandidatePass:
     """Populate and return ``candidate`` with its final 0..100 match score.
 
-    Default duration and observable timing scores are always included.
+    Default duration and actual-start timing scores are always included.
     Declared culmination, azimuth, and Sun-proximity preferences add their
     documented component scores with equal weight. Disabled criteria contribute
     no hidden weight.
@@ -68,26 +68,24 @@ def score_pass_timing_fit(
     criteria: SearchCriteria,
     interval: tuple[datetime, datetime],
 ) -> float:
-    """Score earlier observable starts higher inside the search interval."""
+    """Score actual pass starts around the normalized search-window start.
+
+    Passes starting at or after the search start are preferred over passes that
+    were already in progress. Within each side, closer starts score better.
+    """
 
     interval_seconds = _interval_seconds(interval)
     if interval_seconds <= _FLOAT_TOLERANCE:
         return _MIN_SCORE
 
-    observable_start = compute_observable_start_time_utc(candidate, interval[0])
-    elapsed_seconds = (observable_start - interval[0]).total_seconds()
-    return _clamp_score(
-        _MAX_SCORE * (1.0 - (elapsed_seconds / interval_seconds))
-    )
-
-
-def compute_observable_start_time_utc(
-    candidate: CandidatePass,
-    search_start_utc: datetime,
-) -> datetime:
-    """Return the candidate start clipped to the search-window start."""
-
-    return max(candidate.geometry.start_time_utc, search_start_utc)
+    offset_seconds = (
+        candidate.geometry.start_time_utc - interval[0]
+    ).total_seconds()
+    if offset_seconds < 0.0:
+        return _clamp_score(50.0 * (1.0 + offset_seconds / interval_seconds))
+    if offset_seconds <= interval_seconds:
+        return _clamp_score(_MAX_SCORE - 50.0 * (offset_seconds / interval_seconds))
+    return _MIN_SCORE
 
 
 def score_culmination_fit(
@@ -235,7 +233,6 @@ def _clamp_score(value: float) -> float:
 
 
 __all__ = [
-    "compute_observable_start_time_utc",
     "compute_match_score",
     "score_azimuth_fit",
     "score_culmination_fit",
