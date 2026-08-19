@@ -70,7 +70,10 @@ def api_client(tmp_path, *, raise_server_exceptions=True, settings=None):
     from tlefinder.api.config import ApiSettings
 
     store_path = tmp_path / "stations.yaml"
-    resolved_settings = settings or ApiSettings(station_store_path=store_path)
+    resolved_settings = settings or ApiSettings(
+        station_store_path=store_path,
+        tle_cache_dir=tmp_path / "tle-cache",
+    )
     client = TestClient(
         create_app(resolved_settings),
         raise_server_exceptions=raise_server_exceptions,
@@ -174,7 +177,12 @@ def test_simple_search_adapts_request_and_calls_core_once(
     assert core_request.tle_age_limit is TleAgeLimit.HOURS_24
     assert core_request.criteria.result_limit == 10
     assert core_request.criteria.score_threshold == 0.0
-    assert received_kwargs == [{"approximate_budgeted": True}]
+    assert received_kwargs == [
+        {
+            "cache_dir": tmp_path / "tle-cache",
+            "approximate_budgeted": True,
+        }
+    ]
     assert response.json()["results"][0]["rank"] == 1
     assert events == ["search", "persist"]
 
@@ -213,7 +221,7 @@ def test_advanced_search_adapts_request_and_calls_core_once(monkeypatch, tmp_pat
     assert core_request.criteria.start_azimuth_deg.target == 270.0
     assert core_request.criteria.result_limit == 5
     assert core_request.criteria.score_threshold == 60.0
-    assert received_kwargs == [{}]
+    assert received_kwargs == [{"cache_dir": tmp_path / "tle-cache"}]
 
 
 def test_simple_search_uses_server_configured_parallel_budgeted_mode(
@@ -226,6 +234,7 @@ def test_simple_search_uses_server_configured_parallel_budgeted_mode(
 
     settings = ApiSettings(
         station_store_path=tmp_path / "stations.yaml",
+        tle_cache_dir=tmp_path / "tle-cache",
         parallel_search_enabled=True,
         parallel_worker_count=4,
         parallel_chunk_size=16,
@@ -249,6 +258,7 @@ def test_simple_search_uses_server_configured_parallel_budgeted_mode(
     assert response.status_code == 200
     assert len(received_kwargs) == 1
     assert received_kwargs[0]["approximate_budgeted"] is True
+    assert received_kwargs[0]["cache_dir"] == tmp_path / "tle-cache"
     config = received_kwargs[0]["parallel_search"]
     assert isinstance(config, pass_analysis.ParallelSearchConfig)
     assert config.enabled is True
@@ -267,6 +277,7 @@ def test_advanced_search_uses_server_configured_exact_parallel_mode(
 
     settings = ApiSettings(
         station_store_path=tmp_path / "stations.yaml",
+        tle_cache_dir=tmp_path / "tle-cache",
         parallel_search_enabled=True,
         parallel_worker_count=3,
         parallel_chunk_size=8,
@@ -285,6 +296,7 @@ def test_advanced_search_uses_server_configured_exact_parallel_mode(
     assert response.status_code == 200
     assert len(received_kwargs) == 1
     assert "approximate_budgeted" not in received_kwargs[0]
+    assert received_kwargs[0]["cache_dir"] == tmp_path / "tle-cache"
     config = received_kwargs[0]["parallel_search"]
     assert isinstance(config, pass_analysis.ParallelSearchConfig)
     assert config.enabled is True

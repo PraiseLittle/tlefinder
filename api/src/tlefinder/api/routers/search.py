@@ -246,7 +246,8 @@ def _execute_search(
     approximate_budgeted: bool = False,
 ) -> SearchResponse:
     core_request = adapt_request(body)
-    search_kwargs = {}
+    settings = request.app.state.api_settings
+    search_kwargs = {"cache_dir": settings.tle_cache_dir}
     if approximate_budgeted:
         search_kwargs["approximate_budgeted"] = True
     parallel_search = _parallel_search_config_from_request(request)

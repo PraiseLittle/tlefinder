@@ -18,7 +18,15 @@ Start the local development server with:
 npm run dev
 ```
 
-Until Phase 23 adds the container workflow, start the API separately from `api/` on port 2626. Vite runs on port 2627 and proxies `/api` to `http://127.0.0.1:2626`.
+For non-container development, start the API separately from `api/` on port 2626. Vite runs on port 2627 and proxies `/api` to `http://127.0.0.1:2626`.
+
+For the complete containerized application, run this from the repository root:
+
+```powershell
+docker compose up --detach --build --wait
+```
+
+Open `http://127.0.0.1:2627`. The GUI container serves only the production build and reaches the API through the private Compose network. See [`../docs/CONTAINERS.md`](../docs/CONTAINERS.md) for lifecycle, direct Swagger access, persistence, and troubleshooting commands.
 
 The client defaults to the relative `/api/v1` base URL. Set `VITE_API_BASE_URL` in `.env.local` only when the API is hosted elsewhere, for example:
 

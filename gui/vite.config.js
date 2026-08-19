@@ -5,7 +5,7 @@ import path from "node:path";
 export default defineConfig({
     plugins: [react()],
     resolve: {
-        alias: { "@": path.resolve(__dirname, "src") },
+        alias: { "@": path.resolve(import.meta.dirname, "src") },
     },
     server: {
         port: 2627,
@@ -20,6 +20,6 @@ export default defineConfig({
     },
     build: {
         outDir: "dist",
-        sourcemap: true,
+        sourcemap: false,
     },
 });

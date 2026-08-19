@@ -1,0 +1,87 @@
+name: tlefinder
+
+services:
+  api:
+    image: ${TLEFINDER_API_IMAGE:-tlefinder-api:local}
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: runtime
+    environment:
+      TLEFINDER_STATION_STORE_PATH: /data/stations.yaml
+      TLEFINDER_TLE_CACHE_DIR: /tle-cache
+      TLEFINDER_PARALLEL_SEARCH_ENABLED: ${TLEFINDER_PARALLEL_SEARCH_ENABLED:-false}
+      TLEFINDER_PARALLEL_WORKER_COUNT: ${TLEFINDER_PARALLEL_WORKER_COUNT:-4}
+      TLEFINDER_PARALLEL_CHUNK_SIZE: ${TLEFINDER_PARALLEL_CHUNK_SIZE:-32}
+      TLEFINDER_UVICORN_HOST: 0.0.0.0
+      TLEFINDER_UVICORN_PORT: 2626
+      TLEFINDER_UVICORN_WORKERS: ${TLEFINDER_UVICORN_WORKERS:-1}
+      TLEFINDER_LOG_LEVEL: ${TLEFINDER_LOG_LEVEL:-info}
+    expose:
+      - 2626
+    volumes:
+      - station-data:/data
+      - tle-cache:/tle-cache
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:2626/healthz', timeout=2).read()
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  gui:
+    image: ${TLEFINDER_GUI_IMAGE:-tlefinder-gui:local}
+    build:
+      context: .
+      dockerfile: gui/Dockerfile
+      target: runtime
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - ${TLEFINDER_GUI_PORT:-2627}:8080
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=/dev/null
+        - http://127.0.0.1:8080/
+      interval: 10s
+      timeout: 3s
+      start_period: 5s
+      retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 10s
+
+volumes:
+  station-data:
+  tle-cache:
+
+networks:
+  application:
+    driver: bridge

@@ -5,18 +5,31 @@ on:
     paths:
       - "api/**"
       - "core/**"
+      - "gui/Dockerfile"
+      - "gui/Dockerfile.dockerignore"
+      - "gui/nginx.conf"
+      - "compose*.yaml"
       - "scripts/**"
       - "README.md"
+      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
+      - "development_plan/phase_23*"
   pull_request:
     paths:
       - "api/**"
       - "core/**"
+      - "gui/Dockerfile"
+      - "gui/Dockerfile.dockerignore"
+      - "gui/nginx.conf"
+      - "compose*.yaml"
       - "scripts/**"
       - "README.md"
+      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
+      - "development_plan/phase_23*"
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -34,3 +47,56 @@ jobs:
       - run: poetry run pytest --cov=tlefinder.api --cov-report=term-missing
       - run: poetry build
       - run: python ../scripts/inspect_wheels.py dist/*.whl
+
+  image:
+    name: "docker build API image (push: false)"
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          target: runtime
+          load: true
+          push: false
+          tags: tlefinder-api:ci
+      - name: Smoke test the read-only API container
+        shell: bash
+        run: |
+          docker volume create tlefinder-api-ci-data
+          container_id=$(docker run --detach --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m --cap-drop ALL --security-opt no-new-privileges:true --env TLEFINDER_STATION_STORE_PATH=/data/stations.yaml --env TLEFINDER_UVICORN_HOST=0.0.0.0 --volume tlefinder-api-ci-data:/data --publish 127.0.0.1:2626:2626 tlefinder-api:ci)
+          cleanup() {
+            docker stop --time 30 "$container_id" >/dev/null 2>&1 || true
+            docker rm "$container_id" >/dev/null 2>&1 || true
+            docker volume rm tlefinder-api-ci-data >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:2626/healthz | grep --quiet '"status":"ok"'; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(docker image inspect --format '{{.Config.User}}' tlefinder-api:ci)" = "tlefinder"
+          docker exec "$container_id" python -c "import tlefinder.api, tlefinder.core"
+
+  integration:
+    name: Compose proxy and persistence integration
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: docker compose config --quiet
+      - run: python scripts/container_smoke.py

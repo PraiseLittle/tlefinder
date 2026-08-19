@@ -1,0 +1,16 @@
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+**/coverage/
+**/*.tsbuildinfo
+**/.env*
+**/.git/
+**/.github/
+**/.idea/
+**/.vscode/
+api/
+core/
+development_plan/
+docs/
+scripts/

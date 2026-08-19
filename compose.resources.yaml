@@ -1,0 +1,11 @@
+services:
+  api:
+    environment:
+      TLEFINDER_UVICORN_WORKERS: 1
+      TLEFINDER_PARALLEL_SEARCH_ENABLED: true
+      TLEFINDER_PARALLEL_WORKER_COUNT: 2
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G

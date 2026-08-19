@@ -21,5 +21,15 @@ Start the API on the local development port with:
 poetry run uvicorn tlefinder.api.app:app --reload --port 2626
 ```
 
-Runtime configuration is controlled by `TLEFINDER_STATION_STORE_PATH`, `TLEFINDER_PARALLEL_SEARCH_ENABLED`, `TLEFINDER_PARALLEL_WORKER_COUNT`, and `TLEFINDER_PARALLEL_CHUNK_SIZE`.
+The container launcher is `python -m tlefinder.api.server`. Its local defaults remain `127.0.0.1:2626` with one worker; Compose overrides the host to `0.0.0.0`, persists the station store at `/data/stations.yaml`, and persists downloaded TLE datasets under `/tle-cache`.
+
+Runtime configuration is controlled by `TLEFINDER_STATION_STORE_PATH`, `TLEFINDER_TLE_CACHE_DIR`, `TLEFINDER_PARALLEL_SEARCH_ENABLED`, `TLEFINDER_PARALLEL_WORKER_COUNT`, `TLEFINDER_PARALLEL_CHUNK_SIZE`, `TLEFINDER_UVICORN_HOST`, `TLEFINDER_UVICORN_PORT`, `TLEFINDER_UVICORN_WORKERS`, and `TLEFINDER_LOG_LEVEL`.
+
+From the repository root, start the full application with `docker compose up --detach --build --wait`. Use the opt-in API-port override for Swagger at `http://127.0.0.1:2626/docs`:
+
+```powershell
+docker compose -f compose.yaml -f compose.api-port.yaml up --detach --build --wait
+```
+
+See [`../docs/CONTAINERS.md`](../docs/CONTAINERS.md) for the full operational guide.
 

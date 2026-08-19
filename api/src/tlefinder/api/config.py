@@ -6,9 +6,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from tlefinder.core import pass_analysis
+from tlefinder.core import pass_analysis, tle_repository
 
 STATION_STORE_PATH_ENV = "TLEFINDER_STATION_STORE_PATH"
+TLE_CACHE_DIR_ENV = "TLEFINDER_TLE_CACHE_DIR"
 PARALLEL_SEARCH_ENABLED_ENV = "TLEFINDER_PARALLEL_SEARCH_ENABLED"
 PARALLEL_WORKER_COUNT_ENV = "TLEFINDER_PARALLEL_WORKER_COUNT"
 PARALLEL_CHUNK_SIZE_ENV = "TLEFINDER_PARALLEL_CHUNK_SIZE"
@@ -20,6 +21,7 @@ class ApiSettings:
     """Resolved API runtime settings."""
 
     station_store_path: Path
+    tle_cache_dir: Path = tle_repository.DEFAULT_CACHE_DIR
     parallel_search_enabled: bool = False
     parallel_worker_count: int = DEFAULT_PARALLEL_WORKER_COUNT
     parallel_chunk_size: int = pass_analysis.DEFAULT_PARALLEL_CHUNK_SIZE
@@ -45,8 +47,15 @@ def resolve_api_settings() -> ApiSettings:
         if configured_station_store
         else default_station_store_path()
     )
+    configured_tle_cache = os.environ.get(TLE_CACHE_DIR_ENV)
+    tle_cache_dir = (
+        Path(configured_tle_cache).expanduser()
+        if configured_tle_cache
+        else tle_repository.DEFAULT_CACHE_DIR
+    )
     return ApiSettings(
         station_store_path=station_store_path,
+        tle_cache_dir=tle_cache_dir,
         parallel_search_enabled=_environment_bool(
             PARALLEL_SEARCH_ENABLED_ENV,
             default=False,
@@ -91,6 +100,7 @@ __all__ = [
     "PARALLEL_SEARCH_ENABLED_ENV",
     "PARALLEL_WORKER_COUNT_ENV",
     "STATION_STORE_PATH_ENV",
+    "TLE_CACHE_DIR_ENV",
     "default_station_store_path",
     "resolve_api_settings",
 ]

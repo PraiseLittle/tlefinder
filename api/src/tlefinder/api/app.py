@@ -24,6 +24,11 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     )
     app.state.api_settings = resolved_settings
 
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:
+        """Report process liveness without touching storage or the network."""
+        return {"status": "ok"}
+
     register_exception_handlers(app)
     app.include_router(stations.router, prefix=API_V1_PREFIX)
     app.include_router(search.router, prefix=API_V1_PREFIX)

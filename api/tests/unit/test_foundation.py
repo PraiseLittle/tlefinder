@@ -78,8 +78,10 @@ def test_create_app_attaches_custom_api_settings_to_state(tmp_path):
 
 def test_default_settings_use_backend_controlled_station_store_path(monkeypatch):
     from tlefinder.api.config import resolve_api_settings
+    from tlefinder.core.tle_repository import DEFAULT_CACHE_DIR
 
     monkeypatch.delenv("TLEFINDER_STATION_STORE_PATH", raising=False)
+    monkeypatch.delenv("TLEFINDER_TLE_CACHE_DIR", raising=False)
     monkeypatch.delenv("TLEFINDER_PARALLEL_SEARCH_ENABLED", raising=False)
     monkeypatch.delenv("TLEFINDER_PARALLEL_WORKER_COUNT", raising=False)
     monkeypatch.delenv("TLEFINDER_PARALLEL_CHUNK_SIZE", raising=False)
@@ -89,20 +91,24 @@ def test_default_settings_use_backend_controlled_station_store_path(monkeypatch)
     assert settings.station_store_path.name == "stations.yaml"
     assert settings.station_store_path.parent.name == "data"
     assert "core" not in settings.station_store_path.parts
+    assert settings.tle_cache_dir == DEFAULT_CACHE_DIR
     assert settings.parallel_search_enabled is False
     assert settings.parallel_worker_count == 4
     assert settings.parallel_chunk_size == 32
 
 
-def test_environment_can_override_station_store_path(monkeypatch, tmp_path):
+def test_environment_can_override_persistent_data_paths(monkeypatch, tmp_path):
     from tlefinder.api.config import resolve_api_settings
 
     configured_path = tmp_path / "custom-stations.yaml"
+    configured_cache = tmp_path / "persistent-tle-cache"
     monkeypatch.setenv("TLEFINDER_STATION_STORE_PATH", str(configured_path))
+    monkeypatch.setenv("TLEFINDER_TLE_CACHE_DIR", str(configured_cache))
 
     settings = resolve_api_settings()
 
     assert settings.station_store_path == configured_path
+    assert settings.tle_cache_dir == configured_cache
 
 
 def test_environment_can_enable_server_controlled_parallel_search(monkeypatch, tmp_path):

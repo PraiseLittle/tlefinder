@@ -4,17 +4,24 @@ on:
   push:
     paths:
       - "gui/**"
+      - "compose*.yaml"
       - "scripts/**"
       - "README.md"
+      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
+      - "development_plan/phase_23*"
   pull_request:
     paths:
       - "gui/**"
+      - "compose*.yaml"
       - "scripts/**"
       - "README.md"
+      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
+      - "development_plan/phase_23*"
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -30,7 +37,47 @@ jobs:
           cache: npm
           cache-dependency-path: gui/package-lock.json
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+
+  image:
+    name: "docker build GUI image (push: false)"
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: gui/Dockerfile
+          target: runtime
+          load: true
+          push: false
+          tags: tlefinder-gui:ci
+      - name: Smoke test the read-only GUI container
+        shell: bash
+        run: |
+          container_id=$(docker run --detach --read-only --tmpfs /tmp:rw,nosuid,nodev,size=32m --cap-drop ALL --security-opt no-new-privileges:true --add-host api:127.0.0.1 --publish 127.0.0.1:28080:8080 tlefinder-gui:ci)
+          cleanup() {
+            docker stop --time 10 "$container_id" >/dev/null 2>&1 || true
+            docker rm "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:28080/ | grep --quiet '<div id="root"></div>'; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          test "$(docker image inspect --format '{{.Config.User}}' tlefinder-gui:ci)" = "nginx"
+          map_files=$(docker run --rm --entrypoint /bin/sh tlefinder-gui:ci -c "find /usr/share/nginx/html -name '*.map' -print -quit")
+          test -z "$map_files"
 
