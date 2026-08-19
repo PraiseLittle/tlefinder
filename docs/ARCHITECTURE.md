@@ -1,8 +1,14 @@
 # TLE Finder Core Architecture
 
+## Monorepo Context
+
+The implementation lives in the independently buildable `core/` Poetry project. The `api/` Poetry project depends on its public `tlefinder.core` imports, while the `gui/` npm project reaches search behavior only through API HTTP endpoints. Core has no API, GUI, FastAPI, Pydantic, YAML-persistence, React, or Vite dependency.
+
+Core and API contribute packages to the same implicit PEP 420 `tlefinder` namespace. Neither project contains `src/tlefinder/__init__.py`; public imports remain `tlefinder.core` and `tlefinder.api`.
+
 ## 1. Purpose and Scope
 
-This document proposes the target architecture for the **core search engine** of TLE Finder.
+This document describes the implemented architecture for the **core search engine** of TLE Finder.
 
 It covers the reusable Python logic that:
 
@@ -16,12 +22,7 @@ It covers the reusable Python logic that:
 
 This document defines only the Python core search engine. The GUI and API are separate application layers that adapt their own inputs into the core request model.
 
-This document does **not** define the architecture of:
-
-- the Flask GUI
-- any future HTTP API
-- HTML rendering, forms, or templates
-- output formatting helpers such as text reports or pass files
+The API architecture is documented in [APIArchitecture.md](APIArchitecture.md), and browser behavior is documented in [GUIREQUIREMENT.md](GUIREQUIREMENT.md).
 
 The goal is to define a functional, testable core that handles searches in Python and can be called by the API and standalone Python scripts.
 The GUI must reach search execution through the API instead of importing the core directly.
@@ -56,10 +57,10 @@ These observations help explain the proposed module boundaries below, but they d
 - **Separable core**: the core must be importable without Flask, forms, or templates.
 - **Core-owned default scoring**: default ranking behavior is defined in the core scoring module, not by GUI/API workflow labels.
 
-## 4. Proposed Package Layout
+## 4. Current Package Layout
 
 ```text
-src/tlefinder/core/
+core/src/tlefinder/core/
   models.py
   errors.py
   validation.py
@@ -71,17 +72,11 @@ src/tlefinder/core/
   ranking.py
   engine.py
 
-tests/
+core/tests/
   unit/
   functional/
   fixtures/
-  benchmarks/
 ```
-
-Package naming note:
-
-- this document uses `src/tlefinder/core` as the target package name
-- if the project keeps `get_your_tle`, the same split can be applied under `src/get_your_tle/core`
 
 ## 5. Module Responsibilities
 

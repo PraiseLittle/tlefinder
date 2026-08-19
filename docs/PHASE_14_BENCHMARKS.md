@@ -1,5 +1,7 @@
 # Phase 14 Core Search Benchmark Baseline
 
+The commands below are run from the current `core/` project root.
+
 Captured on 2026-05-18 with `poetry run` using Python 3.10.11.
 
 The benchmark command is:
@@ -33,4 +35,3 @@ The script also supports fixture or local-cache runs for all configured groups:
 poetry run tlefinder-benchmark-core
 poetry run tlefinder-benchmark-core --source cache --cache-dir tmp_tle_cache
 ```
-

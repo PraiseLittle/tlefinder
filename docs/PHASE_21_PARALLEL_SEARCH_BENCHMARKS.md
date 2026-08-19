@@ -1,5 +1,7 @@
 # Phase 21 Parallel Search Benchmark And Operating Notes
 
+The commands below are run from the current `core/` project root.
+
 Captured on 2026-05-26 with `poetry run` using Python 3.10.11.
 
 Environment:

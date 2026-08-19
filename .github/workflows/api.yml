@@ -1,0 +1,36 @@
+name: API
+
+on:
+  push:
+    paths:
+      - "api/**"
+      - "core/**"
+      - "scripts/**"
+      - "README.md"
+      - ".github/workflows/**"
+      - "development_plan/phase_22*"
+  pull_request:
+    paths:
+      - "api/**"
+      - "core/**"
+      - "scripts/**"
+      - "README.md"
+      - ".github/workflows/**"
+      - "development_plan/phase_22*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pipx install poetry==2.3.4
+      - run: poetry install --no-interaction
+      - run: poetry run pytest --cov=tlefinder.api --cov-report=term-missing
+      - run: poetry build
+      - run: python ../scripts/inspect_wheels.py dist/*.whl

@@ -2,7 +2,7 @@
 
 ## 1. Purpose and Scope
 
-This document defines the target architecture for the HTTP API layer of TLE Finder.
+This document defines the implemented architecture for the HTTP API layer of TLE Finder.
 
 The API is responsible for:
 
@@ -33,7 +33,7 @@ The API is a thin adapter around the shared core search workflow.
 - **Deterministic adaptation**: identical API request body, configuration, and TLE dataset produce identical API response bodies.
 - **Simple default behavior**: simple search accepts only station and window input; all other criteria are system defaults.
 
-## 3. Recommended Framework
+## 3. Framework
 
 Use **FastAPI** as the API framework.
 
@@ -63,10 +63,10 @@ httpx = ">=0.27,<1.0"
 
 `httpx` is already a core runtime dependency and can also be used by FastAPI's test client ecosystem.
 
-## 4. Proposed Package Layout
+## 4. Current Package Layout
 
 ```text
-tlefinder/src/tlefinder/api/
+api/src/tlefinder/api/
   __init__.py
   app.py
   adapters.py
@@ -79,12 +79,12 @@ tlefinder/src/tlefinder/api/
     search.py
     stations.py
 
-tlefinder/tests/unit/api/
+api/tests/unit/
   test_adapters.py
   test_errors.py
   test_station_store.py
 
-tlefinder/tests/functional/api/
+api/tests/functional/
   test_openapi.py
   test_search_routes.py
   test_station_routes.py

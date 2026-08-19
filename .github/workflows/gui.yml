@@ -1,0 +1,36 @@
+name: GUI
+
+on:
+  push:
+    paths:
+      - "gui/**"
+      - "scripts/**"
+      - "README.md"
+      - ".github/workflows/**"
+      - "development_plan/phase_22*"
+  pull_request:
+    paths:
+      - "gui/**"
+      - "scripts/**"
+      - "README.md"
+      - ".github/workflows/**"
+      - "development_plan/phase_22*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+

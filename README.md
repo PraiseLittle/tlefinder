@@ -1,46 +1,35 @@
-# TLE Finder
+# TLE Finder Monorepo
 
-New application package for the reusable TLE Finder core search engine.
+TLE Finder is one Git repository containing three independently buildable projects:
 
-Run local tests with:
+- `core/` — the `tlefinder-core` Python distribution and benchmark command.
+- `api/` — the `tlefinder-api` Python distribution and FastAPI application.
+- `gui/` — the `tlefinder-gui` Vite/React frontend.
+
+Dependency direction is one way: API depends on Core through the public `tlefinder.core` contract, and GUI communicates with API only over HTTP. Core never depends on API or GUI. The two Python distributions share the implicit PEP 420 `tlefinder` namespace, so the public imports remain `tlefinder.core` and `tlefinder.api` without either project owning `src/tlefinder/__init__.py`.
+
+## Local development
+
+Follow each component README for installation and tests. Until the container workflow arrives in Phase 23, run API and GUI in separate terminals:
 
 ```powershell
-poetry run pytest
-```
-
-Start the API first, then the GUI dev server with:
-
-```powershell
+# Terminal 1
+cd api
 poetry install
-poetry run tlefinder-dev
+poetry run uvicorn tlefinder.api.app:app --reload --port 2626
+
+# Terminal 2
+cd gui
+npm ci
+npm run dev
 ```
 
-Pass `--api-reload` when you want uvicorn reload enabled.
+Vite proxies `/api` to `http://127.0.0.1:2626`; `VITE_API_BASE_URL` can override the relative `/api/v1` client default.
 
-Poetry uses the Python interpreter selected by `pyenv global`; on this
-workspace that is Python 3.10.
+Run the complete monorepo verification without combining environments or lockfiles:
 
-## Core Request Construction
+```powershell
+./scripts/verify.ps1
+```
 
-GUI, API, and Python callers must construct `tlefinder.core.SearchRequest`
-before calling the core workflow. The shared request must contain:
-
-- `GroundStation(latitude, longitude, elevation_m)` using decimal degrees and meters.
-- `SearchWindow(start_at, duration_minutes)` where `start_at` is a timezone-aware `datetime`. Use `timezone.utc` or an explicit fixed UTC offset; timezone-name objects such as `zoneinfo.ZoneInfo` must be converted by adapters before constructing the core request. Never infer timezone from the station location.
-- `SearchCriteria(...)` using only the phase 2 criteria fields: culmination altitude, azimuth targets with tolerances, Sun proximity, satellite altitude, `score_threshold`, and `result_limit`.
-- `SatelliteGroup.ACTIVE`, `SatelliteGroup.VISUAL`, or `SatelliteGroup.AMATEUR` to select the TLE source group.
-
-Magnitude and object-type filters are intentionally not part of the active
-phase 2 request contract. Diagnostics returned by core models are plain
-JSON-friendly dictionaries with stable snake_case keys.
-
-## Parallel Search Modes
-
-Exact serial search is the default. API deployments can opt in to process-pool
-parallel search with `TLEFINDER_PARALLEL_SEARCH_ENABLED=true`; the conservative
-enabled defaults are `4` workers and chunk size `32`. Simple active searches may
-use approximate budgeted parallel mode when server-side parallel execution is
-enabled and no strict hard filters are present.
-
-Benchmark evidence and operational guidance are recorded in
-[docs/PHASE_21_PARALLEL_SEARCH_BENCHMARKS.md](docs/PHASE_21_PARALLEL_SEARCH_BENCHMARKS.md).
+Architecture and component ownership are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
