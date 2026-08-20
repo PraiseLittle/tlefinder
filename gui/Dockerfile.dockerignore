@@ -16,6 +16,5 @@
 **/.vscode/
 api/
 core/
-development_plan/
-docs/
+**/docs/
 scripts/

@@ -1,40 +1,60 @@
 # TLE Finder GUI
 
-`tlefinder-gui` is the independent React, TypeScript, and Vite frontend. It communicates with the TLE Finder API only through the typed HTTP client in `src/api/client.ts`; it contains no Python search or persistence implementation.
+\`tlefinder-gui\` is the React and TypeScript interface for TLE Finder. It lets users manage optical ground stations, configure simple or advanced searches, inspect ranked passes and sky charts, and copy scheduler-ready times and TLE data.
 
-Install exactly from the committed npm lockfile, then run the component-owned checks:
+## Install and run
 
-```powershell
+~~~powershell
 cd gui
 npm ci
+npm run dev
+~~~
+
+Open <http://127.0.0.1:2627>. During development, Vite proxies \`/api\` to the API at <http://127.0.0.1:2626>.
+
+To start the API and GUI together, run this from the repository root:
+
+~~~powershell
+./scripts/dev.ps1
+~~~
+
+## Use the interface
+
+1. Add or select a ground station.
+2. Choose a UTC or local start time and a search duration.
+3. Select the TLE age limit.
+4. Use Simple mode for a standard active-satellite search, or Advanced mode for group, geometry, altitude, Sun-proximity, result-limit, and score controls.
+5. Run the search and expand a result to inspect its pass chart, times, metrics, and TLE.
+
+Copied start, culmination, and end times are ISO 8601 values with a \`T\` between the date and time. The display can use UTC or the explicit offset selected for the search.
+
+See the [user guide](docs/USER_GUIDE.md) for the complete workflow.
+
+## Change the help content
+
+Edit \`content/how-it-works.json\` to change the How it works button label, dialog title, introduction, steps, section lists, or close button. The React component contains only the modal layout and behavior.
+
+Vite reloads the content during local development. Rebuild the GUI image or production bundle after changing the file for a deployed installation.
+
+## Connect to another API
+
+The browser client uses the relative \`/api/v1\` base URL by default. Copy \`.env.example\` to \`.env.local\` and set \`VITE_API_BASE_URL\` only when the API is hosted elsewhere:
+
+~~~text
+VITE_API_BASE_URL=http://192.168.1.42:2626/api/v1
+~~~
+
+## Test and build
+
+~~~powershell
 npm test
 npm run typecheck
 npm run build
-```
+~~~
 
-Start the local development server with:
+The tests use jsdom, React Testing Library, and stubbed HTTP responses, so they do not require a running API or browser server.
 
-```powershell
-npm run dev
-```
+## More documentation
 
-For non-container development, run `./scripts/dev.ps1` from the repository root to start the API and GUI in one terminal. Alternatively, start the API separately from `api/` on port 2626, then run `npm run dev` here. Vite runs on port 2627 and proxies `/api` to `http://127.0.0.1:2626`.
-
-For the complete containerized application, run this from the repository root:
-
-```powershell
-docker compose up --detach --build --wait
-```
-
-Open `http://127.0.0.1:2627`. The GUI container serves only the production build and reaches the API through the private Compose network. See [`../docs/CONTAINERS.md`](../docs/CONTAINERS.md) for lifecycle, direct Swagger access, persistence, and troubleshooting commands.
-
-The client defaults to the relative `/api/v1` base URL. Set `VITE_API_BASE_URL` in `.env.local` only when the API is hosted elsewhere, for example:
-
-```text
-VITE_API_BASE_URL=http://192.168.1.42:2626/api/v1
-```
-
-`src/api/types.ts` mirrors the public Pydantic models in `../api/src/tlefinder/api/schemas.py`. Contract changes must update both components and their owning tests.
-
-The Vitest suite uses jsdom and React Testing Library. API behavior is stubbed, so GUI unit tests require neither Python, a browser server, nor live network access.
-
+- [Architecture](docs/ARCHITECTURE.md)
+- [User guide](docs/USER_GUIDE.md)

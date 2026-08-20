@@ -11,9 +11,7 @@ on:
       - "compose*.yaml"
       - "scripts/**"
       - "README.md"
-      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_23*"
   pull_request:
     paths:
       - "api/**"
@@ -24,9 +22,7 @@ on:
       - "compose*.yaml"
       - "scripts/**"
       - "README.md"
-      - "docs/CONTAINERS.md"
       - ".github/workflows/**"
-      - "development_plan/phase_23*"
 
 permissions:
   contents: read

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import helpContent from "../../content/how-it-works.json";
 import { HelpModal } from "./HelpModal";
 import { I } from "./icons";
 
@@ -16,8 +17,12 @@ export function Header({
         <img className="brand-mark" src="/cailabs-c.png" alt="Cailabs" />
         <span className="brand-name">TLE Finder</span>
         <span className="brand-tag">Satellite Pass Search</span>
-        <button className="help-btn" onClick={() => setHelpOpen(true)} title="How to use TLE Finder">
-          <I.Help size={12} /> How it works
+        <button
+          className="help-btn"
+          onClick={() => setHelpOpen(true)}
+          title={helpContent.buttonTitle}
+        >
+          <I.Help size={12} /> {helpContent.buttonLabel}
         </button>
         {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
       </div>

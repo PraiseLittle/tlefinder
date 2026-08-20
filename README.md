@@ -1,50 +1,74 @@
-# TLE Finder Monorepo
+# TLE Finder
 
-TLE Finder is one Git repository containing three independently buildable projects:
+TLE Finder searches for satellite passes above an optical ground station and ranks the matches. The repository contains three independently buildable components:
 
-- `core/` — the `tlefinder-core` Python distribution and benchmark command.
-- `api/` — the `tlefinder-api` Python distribution and FastAPI application.
-- `gui/` — the `tlefinder-gui` Vite/React frontend.
+- [Core](core/README.md) — Python search engine and benchmark command.
+- [API](api/README.md) — FastAPI service and station persistence.
+- [GUI](gui/README.md) — React web interface.
 
-Dependency direction is one way: API depends on Core through the public `tlefinder.core` contract, and GUI communicates with API only over HTTP. Core never depends on API or GUI. The two Python distributions share the implicit PEP 420 `tlefinder` namespace, so the public imports remain `tlefinder.core` and `tlefinder.api` without either project owning `src/tlefinder/__init__.py`.
+The API depends on Core. The GUI communicates with the API over HTTP.
 
-## Container quick start
+## Run with Docker
 
-Docker Desktop can run the complete application with one Compose command from the repository root:
+Docker Desktop or Docker Engine with Compose can run the complete application:
 
-```powershell
+~~~powershell
 docker compose up --detach --build --wait
-```
+~~~
 
-Open `http://127.0.0.1:2627`. Compose starts the API first, waits for `/healthz`, then starts the GUI and connects both services through their private network. To expose the API on loopback for Swagger, use:
+Open <http://127.0.0.1:2627>.
 
-```powershell
+Re-run the same command to rebuild after a code change. Stop the application with:
+
+~~~powershell
+docker compose down
+~~~
+
+Stations and downloaded TLE files remain in named Docker volumes when the containers are stopped or rebuilt.
+
+The API normally stays inside the Compose network. To expose it on the local machine as well:
+
+~~~powershell
 docker compose -f compose.yaml -f compose.api-port.yaml up --detach --build --wait
-```
+~~~
 
-Swagger is then available at `http://127.0.0.1:2626/docs`. Docker keeps stations and downloaded TLE datasets in separate named volumes, so both survive container recreation and image rebuilds. See [docs/CONTAINERS.md](docs/CONTAINERS.md) for logs, updates, configuration, volume backup and restore, resource limits, and troubleshooting.
+Swagger is then available at <http://127.0.0.1:2626/docs>.
 
-## Local development
+## Run for development
 
-Install each component once, then use the combined launcher from the repository root:
+Install Python 3.10 or newer, pyenv, Poetry, Node.js 22, npm, and PowerShell 7. Install each component once:
 
-```powershell
-cd api
+~~~powershell
+cd core
+poetry env use (pyenv which python)
 poetry install
+
+cd ../api
+poetry env use (pyenv which python)
+poetry install
+
 cd ../gui
 npm ci
+
 cd ..
+~~~
+
+Start the API and GUI together in the current terminal:
+
+~~~powershell
 ./scripts/dev.ps1
-```
+~~~
 
-Open `http://127.0.0.1:2627`. The launcher keeps both processes in the same terminal; press Ctrl+C to stop them together. It reports a clear error if Docker or another process is already using port `2626` or `2627`.
+Open <http://127.0.0.1:2627>. The API runs on port 2626 and the GUI on port 2627. Press Ctrl+C to stop both processes. Use \`./scripts/dev.ps1 -NoReload\` to disable automatic API reloads.
 
-To run the components independently, start `poetry run uvicorn tlefinder.api.app:app --reload --port 2626` from `api/` and `npm run dev` from `gui/` in separate terminals. Vite proxies `/api` to `http://127.0.0.1:2626`; `VITE_API_BASE_URL` can override the relative `/api/v1` client default.
+The component READMEs explain how to run Core, API, or GUI independently.
 
-Run the complete monorepo verification without combining environments or lockfiles:
+## Verify the repository
 
-```powershell
+Run every component test, build both Python packages, inspect their wheels, typecheck the GUI, and create its production build:
+
+~~~powershell
 ./scripts/verify.ps1
-```
+~~~
 
-Architecture and component ownership are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for component ownership and dependency rules.

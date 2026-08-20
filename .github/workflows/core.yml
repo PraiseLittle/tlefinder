@@ -7,14 +7,12 @@ on:
       - "scripts/**"
       - "README.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
   pull_request:
     paths:
       - "core/**"
       - "scripts/**"
       - "README.md"
       - ".github/workflows/**"
-      - "development_plan/phase_22*"
 
 jobs:
   test:

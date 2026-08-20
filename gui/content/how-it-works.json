@@ -1,0 +1,46 @@
+{
+  "buttonLabel": "How it works",
+  "buttonTitle": "How to use TLE Finder",
+  "dialogTitle": "How to use TLE Finder",
+  "introduction": "TLE Finder finds satellite passes visible from a configured ground station within a selected time window, using TLE data from CelesTrak.",
+  "steps": [
+    {
+      "title": "Pick a station.",
+      "body": "Select it in the left list, or add one with its latitude, longitude and elevation."
+    },
+    {
+      "title": "Set the time window.",
+      "body": "Enter a start time in UTC, or switch to local time and choose the offset. Now + 5 min fills in a start five minutes from now. Search time duration is capped at 30 minutes."
+    },
+    {
+      "title": "Choose the TLE age limit.",
+      "body": "24H only accepts TLE whose epoch is under a day old. The 1W widens the search to TLE whose epoch are under a week old."
+    },
+    {
+      "title": "Add criteria if needed.",
+      "body": "Advanced search adds minimum elevation at culmination, satellite altitude, azimuth targets, sun proximity. Each section is optional until you enable it."
+    },
+    {
+      "title": "Run the search.",
+      "body": "Open a result card to see its geometry, metrics and the TLE used."
+    }
+  ],
+  "sections": [
+    {
+      "title": "Reading the sky chart",
+      "items": [
+        "The orange arc is the pass, from rise through culmination to set. The filled dot marks the culmination.",
+        "The yellow dot is the sun, with 10° and 20° halos."
+      ]
+    },
+    {
+      "title": "Using TLE Finder without access to the Cailabs VPN",
+      "items": [
+        "Clone or download the GitLab repository to your computer.",
+        "Follow the instructions in README.md to install and run TLE Finder locally.",
+        "When running TLE Finder locally, the application may not work while retrieving data from CelesTrak. CelesTrak refreshes its datasets every two hours and may reject repeated download requests during that interval from the same IP address."
+      ]
+    }
+  ],
+  "closeLabel": "Got it"
+}

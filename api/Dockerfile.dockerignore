@@ -20,7 +20,6 @@
 **/stations.yaml
 api/tests/
 core/tests/
-development_plan/
-docs/
+**/docs/
 gui/
 scripts/
