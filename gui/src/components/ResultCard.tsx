@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SearchResultResponse } from "@/api/types";
+import type { SearchResultResponse, StationCoordinates } from "@/api/types";
 import {
   durationStr,
   fmtAz,
@@ -15,9 +15,10 @@ import { I } from "./icons";
 interface Props {
   r: SearchResultResponse;
   displayTz: string; // "utc" or "+HH:MM"
+  station?: StationCoordinates | null;
 }
 
-export function ResultCard({ r, displayTz }: Props) {
+export function ResultCard({ r, displayTz, station }: Props) {
   const [open, setOpen] = useState(r.rank === 1);
   const fmt = (iso: string) =>
     displayTz === "utc" ? fmtTimeUTC(iso) : fmtTimeOffset(iso, parseOffset(displayTz));
@@ -70,7 +71,7 @@ export function ResultCard({ r, displayTz }: Props) {
       {open && (
         <div className="result-detail">
           <div className="detail-chart">
-            <SkyChart geom={r.geometry} />
+            <SkyChart geom={r.geometry} station={station} />
           </div>
           <div className="detail-stats-grid">
             <div className="detail-col">

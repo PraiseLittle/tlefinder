@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { SearchResponse } from "@/api/types";
+import type { SearchResponse, StationCoordinates } from "@/api/types";
 import type { ApiError } from "@/api/client";
 import { ResultCard } from "./ResultCard";
 import { I } from "./icons";
@@ -11,9 +11,10 @@ interface Props {
   response: SearchResponse | null;
   error: ApiError | null;
   displayTz: string;
+  station?: StationCoordinates | null;
 }
 
-export function ResultsPanel({ state, response, error, displayTz }: Props) {
+export function ResultsPanel({ state, response, error, displayTz, station }: Props) {
   const tzLabel = displayTz === "utc" ? "UTC" : `UTC${displayTz}`;
 
   let body: ReactNode;
@@ -97,7 +98,7 @@ export function ResultsPanel({ state, response, error, displayTz }: Props) {
     body = (
       <div className="results-body">
         {response.results.map((r) => (
-          <ResultCard key={r.rank} r={r} displayTz={displayTz} />
+          <ResultCard key={r.rank} r={r} displayTz={displayTz} station={station} />
         ))}
       </div>
     );

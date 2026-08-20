@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { HelpModal } from "./HelpModal";
+import { I } from "./icons";
+
 export function Header({
   online,
   tleStatus,
@@ -5,12 +9,17 @@ export function Header({
   online: boolean;
   tleStatus: { fresh: boolean; lastSync: string };
 }) {
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <header className="app-header">
       <div className="brand">
-        <div className="brand-mark" aria-hidden="true" />
+        <img className="brand-mark" src="/cailabs-c.png" alt="Cailabs" />
         <span className="brand-name">TLE Finder</span>
-        <span className="brand-tag">Optical Pass Search · v0.2</span>
+        <span className="brand-tag">Satellite Pass Search</span>
+        <button className="help-btn" onClick={() => setHelpOpen(true)} title="How to use TLE Finder">
+          <I.Help size={12} /> How it works
+        </button>
+        {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
       </div>
       <div className="header-status">
         <span className={"status-dot" + (tleStatus.fresh ? "" : " stale")}>

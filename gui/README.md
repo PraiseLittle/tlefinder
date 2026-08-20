@@ -18,7 +18,7 @@ Start the local development server with:
 npm run dev
 ```
 
-For non-container development, start the API separately from `api/` on port 2626. Vite runs on port 2627 and proxies `/api` to `http://127.0.0.1:2626`.
+For non-container development, run `./scripts/dev.ps1` from the repository root to start the API and GUI in one terminal. Alternatively, start the API separately from `api/` on port 2626, then run `npm run dev` here. Vite runs on port 2627 and proxies `/api` to `http://127.0.0.1:2626`.
 
 For the complete containerized application, run this from the repository root:
 

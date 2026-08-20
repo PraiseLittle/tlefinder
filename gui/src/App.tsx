@@ -5,6 +5,7 @@ import type {
   PersistedStation,
   SearchResponse,
   SimpleSearchRequest,
+  StationCoordinates,
 } from "@/api/types";
 import { Header } from "@/components/Header";
 import { ResultsPanel, type SearchState } from "@/components/ResultsPanel";
@@ -31,6 +32,7 @@ export function App() {
 
   const [reqState, setReqState] = useState<SearchState>("idle");
   const [response, setResponse] = useState<SearchResponse | null>(null);
+  const [resultStation, setResultStation] = useState<StationCoordinates | null>(null);
   const [apiError, setApiError] = useState<ApiError | null>(null);
 
   const [modal, setModal] = useState<{ station: StationRow | null } | null>(
@@ -159,12 +161,14 @@ export function App() {
     setReqState("loading");
     setApiError(null);
     setResponse(null);
+    setResultStation(null);
     try {
       const resp =
         mode === "simple"
           ? await api.simpleSearch(request as SimpleSearchRequest)
           : await api.advancedSearch(request as AdvancedSearchRequest);
       setResponse(resp);
+      setResultStation({ ...request.station });
       setReqState("ready");
       if (resp.status === "results") {
         pushToast(
@@ -244,6 +248,7 @@ export function App() {
           state={reqState}
           response={response}
           error={apiError}
+          station={resultStation}
           displayTz={displayTz}
         />
       </div>

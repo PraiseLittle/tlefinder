@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { PersistedStation } from "@/api/types";
-import { fmtElev, fmtLat, fmtLon } from "@/lib/format";
+import { fmtElev, fmtLat, fmtLon, parseOffset } from "@/lib/format";
 import type {
   AzimuthKey,
   RangeKey,
@@ -90,8 +90,6 @@ export function SearchPanel({
 
       <WindowFieldset form={form} setForm={setForm} errors={errors} />
 
-      <TleAgeFieldset form={form} setForm={setForm} />
-
       {mode === "advanced" && (
         <AdvancedSections form={form} setForm={setForm} errors={errors} />
       )}
@@ -124,10 +122,36 @@ function WindowFieldset({
     k: K, v: SearchForm["window"][K],
   ) => setForm((f) => ({ ...f, window: { ...f.window, [k]: v } }));
 
+  const startInFiveMinutes = () =>
+    setForm((f) => {
+      const t = new Date(Date.now() + 5 * 60_000);
+      t.setUTCMilliseconds(0);
+      const shifted = new Date(t.getTime() + parseOffset(f.window.utc_offset) * 60_000);
+      const p = (n: number) => String(n).padStart(2, "0");
+      const local =
+        `${shifted.getUTCFullYear()}-${p(shifted.getUTCMonth() + 1)}-` +
+        `${p(shifted.getUTCDate())}T${p(shifted.getUTCHours())}:` +
+        `${p(shifted.getUTCMinutes())}:${p(shifted.getUTCSeconds())}`;
+      return {
+        ...f,
+        window: {
+          ...f.window,
+          start_at_utc: t.toISOString().replace(/\.\d{3}Z$/, "Z"),
+          start_at_local: local,
+        },
+      };
+    });
+
+  const nowButton = (
+    <button className="now-btn" onClick={startInFiveMinutes} title="Set start time to now + 5 minutes">
+      <I.Clock size={11} /> Now + 5 min
+    </button>
+  );
+
   return (
     <div className="adv-section" style={{ marginTop: 0 }}>
       <div className="adv-head open" style={{ cursor: "default" }}>
-        <h4><I.Clock size={14} /> Search window <span className="enabled-pill">Required</span></h4>
+        <h4><I.Clock size={14} /> Search <span className="enabled-pill">Required</span></h4>
         <div className="toggle-group" onClick={(e) => e.stopPropagation()}>
           <button className={form.window.tz_mode === "utc" ? "active" : ""} onClick={() => setW("tz_mode", "utc")}>UTC</button>
           <button className={form.window.tz_mode === "local" ? "active" : ""} onClick={() => setW("tz_mode", "local")}>Local + offset</button>
@@ -140,12 +164,15 @@ function WindowFieldset({
               Start time (UTC) <span className="required">*</span>
               <span className="unit">ISO 8601 · ends in Z</span>
             </label>
-            <input
-              className={"text-input mono" + (errors["window.start_at"] ? " error" : "")}
-              value={form.window.start_at_utc}
-              onChange={(e) => setW("start_at_utc", e.target.value)}
-              placeholder="2026-05-17T22:00:00Z"
-            />
+            <div className="start-row">
+              <input
+                className={"text-input mono" + (errors["window.start_at"] ? " error" : "")}
+                value={form.window.start_at_utc}
+                onChange={(e) => setW("start_at_utc", e.target.value)}
+                placeholder="2026-05-17T22:00:00Z"
+              />
+              {nowButton}
+            </div>
             {errors["window.start_at"] && <div className="field-error">{errors["window.start_at"]}</div>}
           </div>
         ) : (
@@ -154,7 +181,7 @@ function WindowFieldset({
               Local start time <span className="required">*</span>
               <span className="unit">ISO 8601 local + explicit offset</span>
             </label>
-            <div className="datetime-with-offset">
+            <div className="start-row">
               <input
                 className={"text-input mono" + (errors["window.start_at"] ? " error" : "")}
                 type="datetime-local"
@@ -172,57 +199,47 @@ function WindowFieldset({
                   <option key={o} value={o}>UTC {o}</option>
                 ))}
               </select>
+              {nowButton}
             </div>
             {errors["window.start_at"] && <div className="field-error">{errors["window.start_at"]}</div>}
             <div className="field-help">The UTC offset is explicit and is not inferred from the station location.</div>
           </div>
         )}
-        <div className="field-group">
-          <label className="field-label">
-            Duration <span className="required">*</span>
-            <span className="unit">minutes · max 30</span>
-          </label>
-          <input
-            className={"text-input mono" + (errors["window.duration_minutes"] ? " error" : "")}
-            inputMode="decimal"
-            value={form.window.duration_minutes}
-            onChange={(e) => setW("duration_minutes", e.target.value)}
-            placeholder="15"
-            style={{ maxWidth: 180 }}
-          />
-          {errors["window.duration_minutes"] && (
-            <div className="field-error">{errors["window.duration_minutes"]}</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TleAgeFieldset({
-  form,
-  setForm,
-}: {
-  form: SearchForm;
-  setForm: SetForm;
-}) {
-  return (
-    <div className="adv-section">
-      <div className="adv-head" style={{ cursor: "default" }}>
-        <h4><I.Clock size={14} /> TLE age <span className="enabled-pill">Required</span></h4>
-        <div className="toggle-group" onClick={(e) => e.stopPropagation()}>
-          {([
-            ["24h", "24H"],
-            ["1w", "1W"],
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              className={form.tle_age_limit === value ? "active" : ""}
-              onClick={() => setForm((f) => ({ ...f, tle_age_limit: value }))}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="field-row">
+          <div className="field-group" style={{ marginBottom: 0 }}>
+            <label className="field-label">
+              Search window (duration) <span className="required">*</span>
+              <span className="unit">min · max 30</span>
+            </label>
+            <input
+              className={"text-input mono" + (errors["window.duration_minutes"] ? " error" : "")}
+              inputMode="decimal"
+              value={form.window.duration_minutes}
+              onChange={(e) => setW("duration_minutes", e.target.value)}
+              placeholder="15"
+              style={{ maxWidth: 180 }}
+            />
+            {errors["window.duration_minutes"] && (
+              <div className="field-error">{errors["window.duration_minutes"]}</div>
+            )}
+          </div>
+          <div className="field-group" style={{ marginBottom: 0 }}>
+            <label className="field-label">
+              TLE age <span className="required">*</span>
+              <span className="unit">epoch limit</span>
+            </label>
+            <div className="toggle-group" style={{ marginBottom: 0 }}>
+              {([["24h", "24H"], ["1w", "1W"]] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  className={form.tle_age_limit === value ? "active" : ""}
+                  onClick={() => setForm((f) => ({ ...f, tle_age_limit: value }))}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

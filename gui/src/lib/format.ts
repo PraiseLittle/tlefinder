@@ -43,6 +43,11 @@ export function fmtTimeOffset(iso: string, offsetMin: number): string {
   );
 }
 
+/** Convert a displayed timestamp into a scheduler-ready ISO 8601 value. */
+export function isoCopyText(formatted: string): string {
+  return formatted.replace(" ", "T").replace(/\s+([+-]\d{2}:\d{2})$/, "$1");
+}
+
 export function durationStr(startIso: string, endIso: string): string {
   const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
   const s = Math.round(ms / 1000);

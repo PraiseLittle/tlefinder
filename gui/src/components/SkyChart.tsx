@@ -1,56 +1,50 @@
-import type { PassGeometryResponse } from "@/api/types";
+import type { PassGeometryResponse, StationCoordinates } from "@/api/types";
+import { haloRing, passArc, sunPosition, type SkyPoint } from "@/lib/sky";
+
+const SUN_HALO_DEG = 10;
+const SUN_HALO_WIDE_DEG = 20;
 
 /**
  * Polar (az, alt) plot of a satellite pass — north is up, zenith is at the
- * centre. Three markers: pass start (ring), culmination (filled), pass end
- * (ring); accent-colored trajectory in between.
+ * centre. One continuous arc from pass start through culmination to pass end,
+ * plus the sun with 10° and 20° halos when it is near the visible sky.
  */
-export function SkyChart({ geom }: { geom: PassGeometryResponse }) {
+export function SkyChart({
+  geom,
+  station,
+}: {
+  geom: PassGeometryResponse;
+  station?: StationCoordinates | null;
+}) {
   const R = 88;
   const cx = 100;
   const cy = 100;
-  const project = (az: number, alt: number): [number, number] => {
-    const r = R * (1 - Math.max(0, Math.min(90, alt)) / 90);
-    const theta = ((az - 90) * Math.PI) / 180; // 0° = North up
+  const project = (p: SkyPoint): [number, number] => {
+    const r = R * (1 - Math.max(0, Math.min(90, p.alt)) / 90);
+    const theta = ((p.az - 90) * Math.PI) / 180;
     return [cx + r * Math.cos(theta), cy + r * Math.sin(theta)];
   };
+  const toPath = (pts: SkyPoint[], close = false) =>
+    pts
+      .map(project)
+      .map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1))
+      .join(" ") + (close ? " Z" : "");
 
-  const samples = 32;
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-  const fixAz = (a: number, b: number) => {
-    if (b - a > 180) return b - 360;
-    if (a - b > 180) return b + 360;
-    return b;
-  };
+  const arc = passArc(geom);
+  const [sx, sy] = project({ az: geom.start_azimuth_deg, alt: 0 });
+  const [ex, ey] = project({ az: geom.end_azimuth_deg, alt: 0 });
+  const [ux, uy] = project({
+    az: geom.culmination_azimuth_deg,
+    alt: geom.culmination_altitude_deg,
+  });
 
-  const azC = fixAz(geom.start_azimuth_deg, geom.culmination_azimuth_deg);
-  const azE = fixAz(azC, geom.end_azimuth_deg);
-  const altS = 0;
-  const altC = geom.culmination_altitude_deg;
-  const altE = 0;
-
-  const pts: [number, number][] = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples;
-    let az: number;
-    let alt: number;
-    if (t < 0.5) {
-      const u = t / 0.5;
-      az = lerp(geom.start_azimuth_deg, azC, u);
-      alt = lerp(altS, altC, u);
-    } else {
-      const u = (t - 0.5) / 0.5;
-      az = lerp(azC, azE, u);
-      alt = lerp(altC, altE, u);
-    }
-    pts.push(project(az, alt));
-  }
-  const path = pts
-    .map((p, i) => (i === 0 ? "M" : "L") + p[0].toFixed(1) + "," + p[1].toFixed(1))
-    .join(" ");
-  const [sx, sy] = project(geom.start_azimuth_deg, 0);
-  const [cxp, cyp] = project(azC, altC);
-  const [ex, ey] = project(azE, 0);
+  const sun = station
+    ? sunPosition(station.latitude, station.longitude, geom.culmination_time_utc)
+    : null;
+  const sunUp = sun != null && sun.alt >= 0;
+  const sunNearHorizon = sun != null && sun.alt >= -SUN_HALO_DEG;
+  const sunNearWide = sun != null && sun.alt >= -SUN_HALO_WIDE_DEG;
+  const [sunX, sunY] = sun ? project(sun) : [0, 0];
 
   return (
     <div className="sky-chart">
@@ -68,24 +62,49 @@ export function SkyChart({ geom }: { geom: PassGeometryResponse }) {
           <text x={cx + 3} y={cy - 3} fill="var(--text-faint)">90°</text>
           <text x={cx + (R * 2) / 3 + 3} y={cy - 3}>30°</text>
         </g>
-        <path d={path} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" />
+
+        {sunNearWide && sun && (
+          <path
+            d={toPath(haloRing(sun, SUN_HALO_WIDE_DEG), true)}
+            fill="var(--sun-fill-wide)"
+            stroke="var(--sun)"
+            strokeWidth={1}
+            strokeDasharray="2 3"
+          />
+        )}
+        {sunNearHorizon && sun && (
+          <path
+            d={toPath(haloRing(sun, SUN_HALO_DEG), true)}
+            fill="var(--sun-fill)"
+            stroke="var(--sun)"
+            strokeWidth={1.2}
+            strokeDasharray="3 2.5"
+          />
+        )}
+
+        <path d={toPath(arc)} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" />
         <circle cx={sx} cy={sy} r={3} fill="var(--surface)" stroke="var(--accent)" strokeWidth={1.6} />
-        <circle cx={cxp} cy={cyp} r={4} fill="var(--accent)" />
         <circle cx={ex} cy={ey} r={3} fill="var(--surface)" stroke="var(--accent)" strokeWidth={1.6} />
+        <circle cx={ux} cy={uy} r={4} fill="var(--accent)" />
+
+        {sunUp && (
+          <>
+            <circle cx={sunX} cy={sunY} r={4} fill="var(--sun)" />
+            <circle cx={sunX} cy={sunY} r={6.5} fill="none" stroke="var(--sun)" strokeWidth={0.8} opacity={0.5} />
+          </>
+        )}
       </svg>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontFamily: "var(--font-mono)",
-          fontSize: 9.5,
-          color: "var(--text-faint)",
-          padding: "2px 4px",
-        }}
-      >
-        <span>start</span>
-        <span>culmination</span>
-        <span>end</span>
+      <div className="sky-legend">
+        <span><i className="swatch arc" /> pass arc</span>
+        <span><i className="swatch culm" /> culmination</span>
+        <span>
+          <i className="swatch sun" />{" "}
+          {sun == null
+            ? "sun n/a"
+            : sunUp
+              ? `sun · ${SUN_HALO_DEG}°/${SUN_HALO_WIDE_DEG}° halos`
+              : `sun ${sun.alt.toFixed(0)}° (below horizon)`}
+        </span>
       </div>
     </div>
   );

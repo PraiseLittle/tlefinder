@@ -26,21 +26,20 @@ Swagger is then available at `http://127.0.0.1:2626/docs`. Docker keeps stations
 
 ## Local development
 
-Follow each component README for installation and tests. Run API and GUI in separate terminals:
+Install each component once, then use the combined launcher from the repository root:
 
 ```powershell
-# Terminal 1
 cd api
 poetry install
-poetry run uvicorn tlefinder.api.app:app --reload --port 2626
-
-# Terminal 2
-cd gui
+cd ../gui
 npm ci
-npm run dev
+cd ..
+./scripts/dev.ps1
 ```
 
-Vite proxies `/api` to `http://127.0.0.1:2626`; `VITE_API_BASE_URL` can override the relative `/api/v1` client default.
+Open `http://127.0.0.1:2627`. The launcher keeps both processes in the same terminal; press Ctrl+C to stop them together. It reports a clear error if Docker or another process is already using port `2626` or `2627`.
+
+To run the components independently, start `poetry run uvicorn tlefinder.api.app:app --reload --port 2626` from `api/` and `npm run dev` from `gui/` in separate terminals. Vite proxies `/api` to `http://127.0.0.1:2626`; `VITE_API_BASE_URL` can override the relative `/api/v1` client default.
 
 Run the complete monorepo verification without combining environments or lockfiles:
 

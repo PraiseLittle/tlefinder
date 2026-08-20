@@ -87,6 +87,13 @@ export const I = {
       <path d="M5 5l4 4M19 19l-4-4M15 9l4-4M9 15l-4 4" />
     </svg>
   ),
+  Help: (p: IconProps = {}) => (
+    <svg viewBox="0 0 16 16" width={p.size || 14} height={p.size || 14} {...stroke} strokeWidth={1.5}>
+      <circle cx="8" cy="8" r="6" />
+      <path d="M6.3 6.1a1.75 1.75 0 113.4.6c0 1.15-1.7 1.4-1.7 2.6" strokeLinecap="round" />
+      <path d="M8 12.1v.1" strokeLinecap="round" strokeWidth={1.8} />
+    </svg>
+  ),
   Warn: () => (
     <svg viewBox="0 0 24 24" width={22} height={22} {...stroke} strokeWidth={1.5}>
       <path d="M12 4l9 16H3z" />

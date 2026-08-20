@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { MouseEvent } from "react";
+import { isoCopyText } from "@/lib/format";
 import { I } from "./icons";
 
 interface TimeBlockProps {
@@ -21,7 +22,7 @@ export function TimeBlock({
 
   function copy(e: MouseEvent) {
     e.stopPropagation();
-    navigator.clipboard?.writeText(formatted);
+    navigator.clipboard?.writeText(isoCopyText(formatted));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
   }
@@ -38,7 +39,7 @@ export function TimeBlock({
         <button
           className={"copy-time" + (copied ? " copied" : "")}
           onClick={copy}
-          title="Copy timestamp"
+          title="Copy ISO 8601 timestamp"
         >
           {copied ? <I.Check size={12} /> : <I.Copy size={11} />}
         </button>
